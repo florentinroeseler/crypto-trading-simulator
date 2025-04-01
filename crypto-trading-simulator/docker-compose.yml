@@ -1,3 +1,5 @@
+version: '3'
+
 services:
   db:
     image: postgres
@@ -10,5 +12,18 @@ services:
       POSTGRES_DB: local
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - 3000:3000
+    environment:
+      DATABASE_URL: postgres://root:mysecretpassword@db:5432/local
+    depends_on:
+      - db
+
 volumes:
   pgdata:
