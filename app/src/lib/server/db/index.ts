@@ -1,10 +1,14 @@
+// src/lib/server/db/index.ts
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
+import * as schema from './schema';
 
-// Verwende eine einfache hartcodierte Verbindung für die Entwicklung
-// Später kannst du dies durch eine Umgebungsvariable ersetzen
+// Verbindungszeichenfolge für die Datenbankverbindung
 const connectionString = 'postgres://user:password@localhost:5432/trading_simulator';
 
-// Datenbankverbindung für Abfragen
+// Client für Abfragen
 const queryClient = postgres(connectionString);
-export const db = drizzle(queryClient);
+
+// Erstelle die Drizzle-DB-Instanz mit dem Schema
+export const db = drizzle(queryClient, { schema });
