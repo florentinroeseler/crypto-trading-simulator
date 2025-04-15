@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "5173:5173"
+      - '5173:5173'
     environment:
       - DATABASE_URL=postgres://user:password@db:5432/trading_simulator
       - NODE_ENV=development
@@ -28,7 +28,7 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_DB=trading_simulator
     ports:
-      - "5432:5432"
+      - '5433:5432'
     restart: unless-stopped
 
 volumes:
