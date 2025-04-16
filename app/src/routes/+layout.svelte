@@ -1,7 +1,11 @@
+<svelte:head>
+  <base href="/" />
+</svelte:head>
+
 <script>
 	import '../app.css';
 	import Navbar from '$lib/components/Navbar.svelte';
-  </script>
+</script>
   
   <div class="min-h-screen bg-gray-50 flex flex-col">
 	<Navbar />

@@ -1,7 +1,52 @@
 // src/hooks.server.ts
 import { lucia } from '$lib/server/auth';
+import { coinGeckoAPI } from '$lib/server/api/coingecko';
+import { building } from '$app/environment';
+import { env } from '$env/dynamic/private';
 import type { Handle } from '@sveltejs/kit';
 
+// Intervall für die Preisaktualisierung (in Millisekunden)
+// Standard: 5 Minuten, kann über Umgebungsvariable angepasst werden
+const UPDATE_INTERVAL = parseInt(env.CRYPTO_UPDATE_INTERVAL || '300000', 10);
+
+// Flag für aktiven Cron-Job
+let updateJobActive = false;
+
+/**
+ * Startet den Hintergrundjob für Preisupdate
+ */
+function startPriceUpdateJob() {
+  if (updateJobActive) return;
+  
+  updateJobActive = true;
+  console.log(`Preisupdate-Job gestartet. Intervall: ${UPDATE_INTERVAL}ms`);
+  
+  // Initiales Update beim Start
+  updatePrices();
+  
+  // Regelmäßige Updates einrichten
+  setInterval(updatePrices, UPDATE_INTERVAL);
+}
+
+/**
+ * Aktualisiert die Kryptowährungspreise
+ */
+async function updatePrices() {
+  try {
+    console.log('Aktualisiere Kryptowährungspreise...');
+    await coinGeckoAPI.updateAllCryptoPrices();
+    console.log('Preisaktualisierung abgeschlossen');
+  } catch (error) {
+    console.error('Fehler bei der automatischen Preisaktualisierung:', error);
+  }
+}
+
+// Starte den Update-Job, wenn wir nicht im Build-Modus sind
+if (!building) {
+  startPriceUpdateJob();
+}
+
+// Authentifizierungshandler
 export const handle: Handle = async ({ event, resolve }) => {
   console.log('Route:', event.url.pathname);
   console.log('Session cookie:', event.cookies.get(lucia.sessionCookieName));
