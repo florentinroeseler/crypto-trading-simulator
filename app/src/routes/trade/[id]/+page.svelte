@@ -2,7 +2,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
-  import CryptoChart from '$lib/components/CryptoChart.svelte';
+  // Importiere statt CryptoChart die neue SimpleChart-Komponente
+  import SimpleChart from '$lib/components/SimpleChart.svelte';
   import type { PageData } from './$types';
   
   export let data: PageData;
@@ -78,8 +79,8 @@
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- Linke Spalte - Chart und Details -->
     <div class="lg:col-span-2">
-      <!-- Chart -->
-      <CryptoChart symbol={asset.symbol} name={asset.name} color={formAction === 'buy' ? "#047857" : "#DC2626"} />
+      <!-- Chart - Hier verwenden wir die neue SimpleChart-Komponente -->
+      <SimpleChart symbol={asset.symbol} name={asset.name} color={formAction === 'buy' ? "#047857" : "#DC2626"} />
       
       <!-- Asset-Details -->
       <div class="bg-white rounded-lg shadow-md p-6 mb-6">

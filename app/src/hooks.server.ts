@@ -21,8 +21,8 @@ function startPriceUpdateJob() {
   updateJobActive = true;
   console.log(`Preisupdate-Job gestartet. Intervall: ${UPDATE_INTERVAL}ms`);
   
-  // Initiales Update beim Start
-  updatePrices();
+  // Initiales Update nach einer kurzen Verzögerung beim Start (um Server-Start nicht zu blockieren)
+  setTimeout(updatePrices, 10000);
   
   // Regelmäßige Updates einrichten
   setInterval(updatePrices, UPDATE_INTERVAL);
@@ -38,6 +38,11 @@ async function updatePrices() {
     console.log('Preisaktualisierung abgeschlossen');
   } catch (error) {
     console.error('Fehler bei der automatischen Preisaktualisierung:', error);
+    
+    // Bei Rate-Limit-Fehler längere Pause einlegen
+    if (error.message && error.message.includes('Rate-Limit')) {
+      console.log('Rate-Limit erreicht, nächste Aktualisierung erfolgt beim nächsten Intervall');
+    }
   }
 }
 

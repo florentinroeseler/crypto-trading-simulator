@@ -3,6 +3,7 @@ import { env } from '$env/dynamic/private';
 import { assets } from '$lib/server/db/schema';
 import { db } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
+import { rateLimiter } from './rate-limiter';
 
 interface CoinGeckoMarketData {
   id: string;
@@ -37,23 +38,38 @@ export class CoinGeckoAPI {
    */
   async getTopCryptocurrencies(currency = 'eur', limit = 50): Promise<CoinGeckoMarketData[]> {
     try {
-      const url = new URL(`${this.baseUrl}/coins/markets`);
+      // Rate-Limiter anwenden
+      await rateLimiter.throttle();
       
-      // Parameter setzen
-      url.searchParams.set('vs_currency', currency);
-      url.searchParams.set('order', 'market_cap_desc');
-      url.searchParams.set('per_page', limit.toString());
-      url.searchParams.set('page', '1');
-      url.searchParams.set('sparkline', 'false');
-      url.searchParams.set('price_change_percentage', '24h');
+      // Erstelle die Basis-URL mit Query-Parametern
+      let url = `${this.baseUrl}/coins/markets?vs_currency=${currency}&order=market_cap_desc&per_page=${limit}&page=1&sparkline=false&price_change_percentage=24h`;
       
+      // WICHTIG: API-Key als Demo-Key Query-Parameter verwenden
       if (this.apiKey) {
-        url.searchParams.set('x_cg_pro_api_key', this.apiKey);
+        url += `&x_cg_demo_api_key=${this.apiKey}`;
+        console.log('API-Key wurde als Demo-Key Query-Parameter hinzugefügt');
       }
-
-      const response = await fetch(url.toString());
+      
+      console.log(`Fetching CoinGecko data from: ${url}`);
+      
+      // Request nur mit Accept-Header senden (kein API-Key im Header)
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
       
       if (!response.ok) {
+        console.error(`CoinGecko API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`Response body: ${errorText}`);
+        
+        // Bei Rate-Limiting den Rate-Limiter informieren und einen aussagekräftigeren Fehler werfen
+        if (response.status === 429) {
+          rateLimiter.handleRateLimitExceeded();
+          throw new Error(`CoinGecko Rate-Limit erreicht. Bitte warte ein paar Minuten oder überprüfe deinen API-Key.`);
+        }
+        
         throw new Error(`CoinGecko API error: ${response.status} ${response.statusText}`);
       }
       
@@ -79,6 +95,7 @@ export class CoinGeckoAPI {
       }
       
       // Hole aktuelle Daten von CoinGecko
+      // Erhöhe das Limit, um mehr Kryptos abzudecken
       const cryptoData = await this.getTopCryptocurrencies('eur', 100);
       
       // Erstelle eine Map für schnelleren Zugriff auf CoinGecko-Daten
@@ -86,6 +103,9 @@ export class CoinGeckoAPI {
       cryptoData.forEach(crypto => {
         symbolToData.set(crypto.symbol.toLowerCase(), crypto);
       });
+      
+      console.log(`Gefundene Kryptos bei CoinGecko: ${cryptoData.length}`);
+      console.log(`Zu aktualisierende Kryptos in der DB: ${dbAssets.length}`);
       
       let updatedCount = 0;
       
@@ -112,6 +132,8 @@ export class CoinGeckoAPI {
             .where(eq(assets.id, asset.id));
           
           updatedCount++;
+        } else {
+          console.log(`Keine Daten gefunden für: ${asset.symbol}`);
         }
       }
       

@@ -1,4 +1,3 @@
-// src/routes/api/update-prices/+server.ts
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { coinGeckoAPI } from '$lib/server/api/coingecko';
