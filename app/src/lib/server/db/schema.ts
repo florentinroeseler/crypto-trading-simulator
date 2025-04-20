@@ -1,5 +1,5 @@
 // src/lib/server/db/schema.ts
-import { pgTable, text, uuid, timestamp, doublePrecision, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, doublePrecision, boolean, index } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
@@ -64,3 +64,23 @@ export const transactions = pgTable("transactions", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   total: doublePrecision("total").notNull()
 });
+
+export const assetPrices = pgTable(
+  'asset_prices',
+  {
+    id:        uuid('id').primaryKey().defaultRandom().notNull(),
+    assetId:   uuid('asset_id')
+                 .notNull()
+                 .references(() => assets.id, { onDelete: 'cascade' }),
+    price:     doublePrecision('price').notNull(),
+    timestamp: timestamp('timestamp').notNull(),
+  },
+  (table) => ({
+    /** <<< ALLE Indizes gehören HIER hinein >>> */
+    assetIdx:     index('idx_asset_prices_asset').on(table.assetId),
+    assetTsIdx:   index('idx_asset_prices_asset_ts').on(
+                    table.assetId,
+                    table.timestamp,
+                  ),
+  }),
+);

@@ -1,6 +1,6 @@
 // src/lib/server/api/coingecko.ts
 import { env } from '$env/dynamic/private';
-import { assets } from '$lib/server/db/schema';
+import { assetPrices, assets } from '$lib/server/db/schema';
 import { db } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
 import { rateLimiter } from './rate-limiter';
@@ -115,6 +115,7 @@ export class CoinGeckoAPI {
         const geckoData = symbolToData.get(symbol);
         
         if (geckoData) {
+          /* 1) live‑Preis ins assets‑Table schreiben -------------------- */
           await db.update(assets)
             .set({
               currentPrice: geckoData.current_price,
@@ -130,6 +131,17 @@ export class CoinGeckoAPI {
               athDate: geckoData.ath_date ? new Date(geckoData.ath_date) : null
             })
             .where(eq(assets.id, asset.id));
+
+          /* 2) Preis‑Snapshot in asset_prices loggen -------------------- */
+          await db
+            .insert(assetPrices)
+            .values({
+              assetId:   asset.id,
+              price:     geckoData.current_price,
+              timestamp: new Date(geckoData.last_updated),
+            })
+            // duplizierte Snapshots derselben Minute ignorieren
+            .onConflictDoNothing();
           
           updatedCount++;
         } else {

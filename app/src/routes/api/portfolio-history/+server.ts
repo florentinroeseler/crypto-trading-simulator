@@ -1,52 +1,194 @@
 // src/routes/api/portfolio-history/+server.ts
-import { json } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
-import { portfolioHistoryService } from '$lib/server/api/portfolio-history';
+import { json } from "@sveltejs/kit";
+import { db } from "$lib/server/db";
+import {
+  users,
+  transactions,
+  assets,
+  assetPrices //  <-- neue Tabelle für historische Kurse
+} from "$lib/server/db/schema";
+import { eq, and, gte, inArray } from "drizzle-orm";
 
-export const GET: RequestHandler = async ({ url, locals }) => {
-  // Prüfe, ob der Benutzer angemeldet ist
-  if (!locals.user) {
-    return json({
-      success: false,
-      message: 'Nicht autorisiert'
-    }, { status: 401 });
-  }
-  
+/**
+ * Liefert die Portfolio‑Historie des eingeloggten Nutzers.
+ * – Transaktionen werden berücksichtigt
+ * – Kurs‑Schwankungen werden anhand der Tabelle `asset_prices` nachgebildet
+ *
+ * akzeptierte Query‑Parameter:
+ *   timeframe = 1d | 7d | 30d | 90d  (Default 30d)
+ */
+export async function GET({ locals, url }) {
   try {
-    // Parameter aus der URL abrufen
-    const daysParam = url.searchParams.get('days') || '30';
-    let days = parseInt(daysParam, 10);
-    
-    // Sicherstellen, dass days ein gültiger Wert ist
-    if (isNaN(days) || days <= 0) {
-      days = 30; // Standard: 30 Tage
+    /* ─────────────────────── Sicherheit ─────────────────────── */
+    if (!locals.user) {
+      return json({ success: false, message: "Nicht autorisiert" }, { status: 401 });
     }
-    
-    // Auf maximal 365 Tage begrenzen (um Ressourcen zu schonen)
-    days = Math.min(days, 365);
-    
-    // Portfolio-Verlaufsdaten abrufen
-    const portfolioHistory = await portfolioHistoryService.getPortfolioHistory(
-      locals.user.id,
-      days
-    );
-    
-    // Füge auch das aktuelle Guthaben hinzu
-    const portfolioWithBalance = {
-      history: portfolioHistory,
-      currentBalance: locals.user.balance || 0
-    };
-    
+
+    /* ─────────────────── Nutzerdaten laden ──────────────────── */
+    const userRow = await db
+      .select({ createdAt: users.createdAt })
+      .from(users)
+      .where(eq(users.id, locals.user.id))
+      .limit(1);
+
+    if (userRow.length === 0) {
+      return json({ success: false, message: "Benutzer nicht gefunden" }, { status: 404 });
+    }
+
+    const accountCreation = new Date(userRow[0].createdAt);
+
+    /* ────────────────── Zeitraum bestimmen ──────────────────── */
+    const timeframe = url.searchParams.get("timeframe") ?? "30d";
+    const now = Date.now();
+
+    const startTime = (() => {
+      switch (timeframe) {
+        case "1d":
+          return new Date(now - 1 * 24 * 60 * 60 * 1_000);
+        case "7d":
+          return new Date(now - 7 * 24 * 60 * 60 * 1_000);
+        case "90d":
+          return new Date(now - 90 * 24 * 60 * 60 * 1_000);
+        default: // 30d
+          return new Date(now - 30 * 24 * 60 * 60 * 1_000);
+      }
+    })();
+
+    /* ───────────────── Transaktionen laden ──────────────────── */
+    const userTx = await db
+      .select({
+        id: transactions.id,
+        assetId: transactions.assetId,
+        type: transactions.type,
+        quantity: transactions.quantity,
+        price: transactions.price,
+        total: transactions.total,
+        timestamp: transactions.timestamp
+      })
+      .from(transactions)
+      .where(eq(transactions.userId, locals.user.id))
+      .orderBy(transactions.timestamp);
+
+    const userAssetIds = [...new Set(userTx.map((t) => t.assetId))];
+
+    /* ──────────────── aktuelle Asset‑Preise (Fallback) ──────────────── */
+    const currentPrices = await db
+      .select({ id: assets.id, price: assets.currentPrice })
+      .from(assets)
+      .where(inArray(assets.id, userAssetIds));
+
+    const fallbackPriceMap: Record<string, number> = {};
+    currentPrices.forEach((a) => (fallbackPriceMap[a.id] = a.price));
+
+    /* ──────────────── historische Kurse laden ──────────────── */
+    const priceRows = await db
+      .select({
+        assetId: assetPrices.assetId,
+        price: assetPrices.price,
+        ts: assetPrices.timestamp
+      })
+      .from(assetPrices)
+      .where(and(inArray(assetPrices.assetId, userAssetIds), gte(assetPrices.timestamp, startTime)))
+      .orderBy(assetPrices.assetId, assetPrices.timestamp);
+
+    const priceSeries: Record<string, { ts: number; price: number }[]> = {};
+    for (const row of priceRows) {
+      (priceSeries[row.assetId] ??= []).push({ ts: row.ts.getTime(), price: row.price });
+    }
+
+    /**
+     * Gibt den zuletzt bekannten Preis (<= t) für ein Asset zurück.
+     * Fällt auf currentPrice zurück, falls keine Historie vorhanden ist.
+     */
+    function priceAt(assetId: string, t: number): number {
+      const series = priceSeries[assetId];
+      if (!series || series.length === 0) return fallbackPriceMap[assetId] ?? 0;
+
+      // lineare Suche rückwärts – bei < 5k Punkten völlig ok
+      for (let i = series.length - 1; i >= 0; i--) {
+        if (series[i].ts <= t) return series[i].price;
+      }
+      return series[0].price; // alle Kurse liegen nach t
+    }
+
+    /* ───────────────────── Zeitpunkte bauen ───────────────────── */
+    const DAY = 86_400_000;
+    const diffDays = Math.ceil((now - startTime.getTime()) / DAY);
+    const interval = diffDays <= 1 ? 5 * 60 * 1_000   // 5 Minuten
+                    : diffDays <= 7 ? 60 * 60 * 1_000 // 1 h
+                    : diffDays <= 30 ? DAY           // 1 Tag
+                    : 2 * DAY;                       // 2 Tage
+
+    const timePoints: number[] = [];
+    for (let t = startTime.getTime(); t <= now; t += interval) timePoints.push(t);
+    if (timePoints[timePoints.length - 1] !== now) timePoints.push(now);
+
+    //  Transaktionszeitpunkte hinzufügen, damit jede Bewegung dargestellt wird
+    userTx.forEach((tx) => {
+      const ts = tx.timestamp.getTime();
+      if (ts >= startTime.getTime() && ts <= now) timePoints.push(ts);
+    });
+
+    const uniqueTimes = [...new Set(timePoints)].sort((a, b) => a - b);
+
+    /* ───────────────── Portfolio‑Historie berechnen ───────────────── */
+    type Holding = { qty: number };
+    const holdings: Record<string, Holding> = {};
+    let cash = 10_000; // Startguthaben
+
+    const portfolioHistory: {
+      timestamp: number;
+      balanceValue: number;
+      investedValue: number;
+      totalValue: number;
+      preAccount: boolean;
+    }[] = [];
+
+    let txIndex = 0;
+
+    for (const ts of uniqueTimes) {
+      // Transaktionen bis einschließlich ts anwenden
+      while (txIndex < userTx.length && userTx[txIndex].timestamp.getTime() <= ts) {
+        const tx = userTx[txIndex];
+        const { assetId, quantity, total, type } = tx;
+        if (type === "buy") {
+          (holdings[assetId] ??= { qty: 0 }).qty += quantity;
+          cash -= total;
+        } else if (type === "sell") {
+          (holdings[assetId] ??= { qty: 0 }).qty -= quantity;
+          cash += total;
+        }
+        txIndex++;
+      }
+
+      // Wert der Positionen bestimmen
+      let invested = 0;
+      for (const assetId in holdings) {
+        const qty = holdings[assetId].qty;
+        if (qty <= 0) continue;
+        invested += qty * priceAt(assetId, ts);
+      }
+
+      portfolioHistory.push({
+        timestamp: ts,
+        balanceValue: cash,
+        investedValue: invested,
+        totalValue: invested + cash,
+        preAccount: ts < accountCreation.getTime()
+      });
+    }
+
+    /* ─────────────────── Antwort zurückgeben ─────────────────── */
     return json({
       success: true,
-      data: portfolioWithBalance
+      data: {
+        history: portfolioHistory,
+        timeframe,
+        accountCreationDate: accountCreation.getTime()
+      }
     });
-  } catch (error) {
-    console.error('Fehler beim Abrufen der Portfolio-Historie:', error);
-    return json({
-      success: false,
-      message: 'Fehler beim Abrufen der Portfolio-Historie',
-      error: error instanceof Error ? error.message : 'Unbekannter Fehler'
-    }, { status: 500 });
+  } catch (err) {
+    console.error("Fehler beim Laden der Portfolio‑Historie:", err);
+    return json({ success: false, message: "Interner Serverfehler" }, { status: 500 });
   }
-};
+}
