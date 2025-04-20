@@ -4,8 +4,6 @@
   import type { PageData } from './$types';
   import SeedDataButton from '$lib/components/SeedDataButton.svelte';
   import PortfolioChart from '$lib/components/PortfolioChart.svelte';
-  import AdminAssets from '$lib/components/AdminAssets.svelte';
-	import AdminManagement from '$lib/components/AdminManagement.svelte';
   
   export let data: PageData;
   
@@ -51,8 +49,6 @@
   const hasPortfolioData = data.portfolio?.items?.length > 0;
   const hasTransactionData = data?.recentTransactions?.length > 0;
   
-  // Prüfen, ob der Benutzer Admin ist
-  const isAdmin = data.user?.isAdmin || false;
 </script>
 
 <svelte:head>
@@ -61,12 +57,6 @@
 
 <div class="bg-gray-50 min-h-screen">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    
-    <!-- Admin-Assets-Komponente (nur für Admins sichtbar) -->
-    <AdminAssets isAdmin={false} />
-    
-    <!-- Admin-Management-Komponente (nur für Admins sichtbar) -->        
-    <AdminManagement isAdmin={false} />
     
     <!-- Testdaten-Generator (nur anzeigen, wenn keine Portfoliodaten vorhanden sind) -->
     {#if !hasPortfolioData}
@@ -150,7 +140,7 @@
         {#if !hasPortfolioData}
           <div class="text-center p-6 bg-gray-50 rounded-lg">
             <p class="text-gray-600">Du hast noch keine Kryptowährungen in deinem Portfolio.</p>
-            <a href="/cryptos" class="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+            <a href="/trade" class="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
               Starte mit deinem ersten Trade
             </a>
           </div>

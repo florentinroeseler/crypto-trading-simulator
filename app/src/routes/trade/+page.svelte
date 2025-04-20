@@ -206,7 +206,7 @@
                       <div class="flex items-center">
                         {#if crypto.imageUrl}
                           <div class="flex-shrink-0 h-10 w-10">
-                            <img class="h-10 w-10 rounded-full" src={base}{crypto.imageUrl} alt={crypto.name} />
+                            <img class="h-10 w-10 rounded-full" src={crypto.imageUrl} alt={crypto.name} />
                           </div>
                         {:else}
                           <div class="flex-shrink-0 h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">

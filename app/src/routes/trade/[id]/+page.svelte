@@ -2,7 +2,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
-  // Importiere statt CryptoChart die neue SimpleChart-Komponente
   import SimpleChart from '$lib/components/SimpleChart.svelte';
   import type { PageData } from './$types';
   
@@ -55,6 +54,17 @@
     } else {
       quantity = availableSellAmount;
     }
+  }
+  
+  // Verarbeite Formular mit direkter Browser-Neulademethode
+  function handleSubmit() {
+    return async ({ result }) => {
+      if (result.type === 'success') {
+        // Die direkteste und zuverlässigste Methode: Browser-Neuladen erzwingen
+        // Der 'false' Parameter sorgt dafür, dass aus dem Server neu geladen wird, nicht aus dem Cache
+        window.location.reload();
+      }
+    };
   }
 </script>
 
@@ -249,8 +259,10 @@
           </button>
         </div>
         
-        <!-- Formular -->
-        <form method="POST" action="?/{formAction}" use:enhance>
+        <!-- Formular mit direkter Neuladen-Methode -->
+        <form method="POST" use:enhance={handleSubmit}>
+          <input type="hidden" name="_action" value={formAction} />
+          
           <div class="mb-4">
             <label for="quantity" class="block mb-2 font-medium text-gray-700">
               Menge {asset.symbol}
