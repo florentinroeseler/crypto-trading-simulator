@@ -1,21 +1,22 @@
-// src/routes/api/portfolio-history/+server.ts
+// Änderungen für src/routes/api/portfolio-history/+server.ts
 import { json } from "@sveltejs/kit";
 import { db } from "$lib/server/db";
 import {
   users,
   transactions,
   assets,
-  assetPrices //  <-- neue Tabelle für historische Kurse
+  assetPrices
 } from "$lib/server/db/schema";
 import { eq, and, gte, inArray } from "drizzle-orm";
 
 /**
- * Liefert die Portfolio‑Historie des eingeloggten Nutzers.
- * – Transaktionen werden berücksichtigt
- * – Kurs‑Schwankungen werden anhand der Tabelle `asset_prices` nachgebildet
+ * Liefert die Portfolio-Historie eines Nutzers.
+ * - Transaktionen werden berücksichtigt
+ * - Kurs-Schwankungen werden anhand der Tabelle `asset_prices` nachgebildet
  *
- * akzeptierte Query‑Parameter:
+ * akzeptierte Query-Parameter:
  *   timeframe = 1d | 7d | 30d | 90d  (Default 30d)
+ *   userId = UUID des Benutzers (optional, falls nicht angegeben: eingeloggter Benutzer)
  */
 export async function GET({ locals, url }) {
   try {
@@ -24,11 +25,32 @@ export async function GET({ locals, url }) {
       return json({ success: false, message: "Nicht autorisiert" }, { status: 401 });
     }
 
+    /* ─────────────── Ziel-Benutzer bestimmen ────────────────── */
+    const requestedUserId = url.searchParams.get("userId");
+    const targetUserId = requestedUserId || locals.user.id;
+
+    // Wenn ein anderer Benutzer angefordert wird, Berechtigungen prüfen
+    if (requestedUserId && requestedUserId !== locals.user.id) {
+      const requestedUser = await db
+        .select({ isPortfolioPublic: users.isPortfolioPublic })
+        .from(users)
+        .where(eq(users.id, requestedUserId))
+        .limit(1);
+
+      if (requestedUser.length === 0) {
+        return json({ success: false, message: "Benutzer nicht gefunden" }, { status: 404 });
+      }
+
+      if (!requestedUser[0].isPortfolioPublic) {
+        return json({ success: false, message: "Portfolio ist nicht öffentlich" }, { status: 403 });
+      }
+    }
+
     /* ─────────────────── Nutzerdaten laden ──────────────────── */
     const userRow = await db
       .select({ createdAt: users.createdAt })
       .from(users)
-      .where(eq(users.id, locals.user.id))
+      .where(eq(users.id, targetUserId))
       .limit(1);
 
     if (userRow.length === 0) {
@@ -66,12 +88,12 @@ export async function GET({ locals, url }) {
         timestamp: transactions.timestamp
       })
       .from(transactions)
-      .where(eq(transactions.userId, locals.user.id))
+      .where(eq(transactions.userId, targetUserId))
       .orderBy(transactions.timestamp);
 
     const userAssetIds = [...new Set(userTx.map((t) => t.assetId))];
 
-    /* ──────────────── aktuelle Asset‑Preise (Fallback) ──────────────── */
+    /* ──────────────── aktuelle Asset-Preise (Fallback) ──────────────── */
     const currentPrices = await db
       .select({ id: assets.id, price: assets.currentPrice })
       .from(assets)
@@ -114,16 +136,16 @@ export async function GET({ locals, url }) {
     /* ───────────────────── Zeitpunkte bauen ───────────────────── */
     const DAY = 86_400_000;
     const diffDays = Math.ceil((now - startTime.getTime()) / DAY);
-    const interval = diffDays <= 1 ? 5 * 60 * 1_000   // 5 Minuten
-                    : diffDays <= 7 ? 60 * 60 * 1_000 // 1 h
-                    : diffDays <= 30 ? DAY           // 1 Tag
-                    : 2 * DAY;                       // 2 Tage
+    const interval = diffDays <= 1 ? 5 * 60 * 1_000   // 5 Minuten
+                    : diffDays <= 7 ? 60 * 60 * 1_000 // 1 h
+                    : diffDays <= 30 ? DAY           // 1 Tag
+                    : 2 * DAY;                       // 2 Tage
 
     const timePoints: number[] = [];
     for (let t = startTime.getTime(); t <= now; t += interval) timePoints.push(t);
     if (timePoints[timePoints.length - 1] !== now) timePoints.push(now);
 
-    //  Transaktionszeitpunkte hinzufügen, damit jede Bewegung dargestellt wird
+    //  Transaktionszeitpunkte hinzufügen, damit jede Bewegung dargestellt wird
     userTx.forEach((tx) => {
       const ts = tx.timestamp.getTime();
       if (ts >= startTime.getTime() && ts <= now) timePoints.push(ts);
@@ -131,7 +153,7 @@ export async function GET({ locals, url }) {
 
     const uniqueTimes = [...new Set(timePoints)].sort((a, b) => a - b);
 
-    /* ───────────────── Portfolio‑Historie berechnen ───────────────── */
+    /* ───────────────── Portfolio-Historie berechnen ───────────────── */
     type Holding = { qty: number };
     const holdings: Record<string, Holding> = {};
     let cash = 10_000; // Startguthaben
@@ -188,7 +210,7 @@ export async function GET({ locals, url }) {
       }
     });
   } catch (err) {
-    console.error("Fehler beim Laden der Portfolio‑Historie:", err);
+    console.error("Fehler beim Laden der Portfolio-Historie:", err);
     return json({ success: false, message: "Interner Serverfehler" }, { status: 500 });
   }
 }

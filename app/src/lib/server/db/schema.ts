@@ -9,7 +9,11 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   balance: doublePrecision("balance").default(10000).notNull(),
-  isAdmin: boolean("is_admin").default(false).notNull()
+  isAdmin: boolean("is_admin").default(false).notNull(),
+  // Neue Felder
+  profileImageUrl: text("profile_image_url"),
+  bio: text("bio"),
+  isPortfolioPublic: boolean("is_portfolio_public").default(true).notNull()
 });
 
 export const sessions = pgTable("sessions", {

@@ -5,6 +5,7 @@
   // Eigenschaften für den Chart
   export let balance: number = 0; // Aktuelles Guthaben
   export let color: string = '#3B82F6'; // Default: Blau
+  export let userId: string = undefined; // Neue Prop für die Benutzer-ID
   
   // Intern verwendete Variablen
   let chartData: any[] = [];
@@ -465,7 +466,10 @@ if (accountStartIndex >= 0 && accountStartIndex < points.length - 1) {
       
       try {
         // API-Endpunkt mit dem gewählten Zeitraum aufrufen
-        const response = await fetch(`/api/portfolio-history?timeframe=${timeframe}`);
+        const url = userId 
+        ? `/api/portfolio-history?timeframe=${timeframe}&userId=${userId}` 
+        : `/api/portfolio-history?timeframe=${timeframe}`;
+        const response = await fetch(url);
         
         if (!response.ok) {
           throw new Error(`Fehler: ${response.status} ${response.statusText}`);

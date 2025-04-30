@@ -1,17 +1,71 @@
 <!-- src/lib/components/Navbar.svelte -->
 <script>
-  // Importiere den Benutzer aus dem Seitendatenkontext
   import { page } from '$app/stores';
+  import { onMount, afterUpdate } from 'svelte';
+  import UserSearch from './social/UserSearch.svelte';
+  import { browser } from '$app/environment';
   
   // Benutzer ist nun dynamisch, nicht mehr hartcodiert
   $: isLoggedIn = !!$page.data.user;
   $: user = $page.data.user;
+
+  // Standard-Profilbild, falls keines gesetzt ist
+  const defaultProfileImage = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+  
+  // Profilbild mit Benutzer-spezifischem Schlüssel
+  let profileImage = defaultProfileImage;
+  
+  // Aktualisiere das Profilbild basierend auf dem angemeldeten Benutzer
+  function updateProfileImageForUser() {
+    if (browser && user) {
+      // Verwende benutzer-spezifischen Schlüssel
+      const storageKey = `userProfileImage_${user.id}`;
+      const storedImage = localStorage.getItem(storageKey);
+      
+      if (storedImage) {
+        profileImage = storedImage;
+      } else if (user.profileImageUrl) {
+        profileImage = user.profileImageUrl;
+      } else {
+        profileImage = defaultProfileImage;
+      }
+    } else {
+      profileImage = defaultProfileImage;
+    }
+  }
+  
+  // Bei Änderung des Benutzers aktualisieren
+  $: if (user) {
+    updateProfileImageForUser();
+  }
+  
+  onMount(() => {
+    updateProfileImageForUser();
+    
+    // Event-Listener für Profilbild-Updates
+    window.addEventListener('profileImageUpdated', (event) => {
+      // @ts-ignore - Custom-Event-Handling
+      const newImageUrl = event.detail.profileImageUrl;
+      const userId = event.detail.userId;
+      
+      // Nur aktualisieren, wenn es der aktuelle Benutzer ist
+      if (user && userId === user.id && newImageUrl) {
+        profileImage = newImageUrl;
+      }
+    });
+    
+    return () => {
+      window.removeEventListener('profileImageUpdated', null);
+    };
+  });
 </script>
+
+<!-- Rest des Codes bleibt unverändert -->
 
 <nav class="bg-white shadow">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between h-16">
-      <div class="flex">
+      <div class="flex items-center">
         <div class="flex-shrink-0 flex items-center">
           <a href="/" class="text-xl font-bold text-blue-600">
             Crypto Trading Simulator
@@ -30,9 +84,23 @@
           >
             Coins
           </a>
+          <a 
+            href="/leaderboard" 
+            class="text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium"
+          >
+            Leaderboard
+          </a>
         </div>
       </div>
-      <div class="hidden sm:ml-6 sm:flex sm:items-center">
+
+      <!-- Suchfeld in der Mitte positionieren -->
+      <div class="hidden md:flex md:items-center md:justify-center flex-1 mx-4">
+        <div class="w-full max-w-xs">
+          <UserSearch />
+        </div>
+      </div>
+      
+      <div class="hidden sm:flex sm:items-center">
         {#if isLoggedIn}
           <a 
             href="/dashboard" 
@@ -40,9 +108,21 @@
           >
             Dashboard
           </a>
-          <span class="text-gray-500 px-3 py-2 text-sm">
-            {user.username}
-          </span>
+          
+          <!-- Profilbild und Username mit Dropdown -->
+          <div class="ml-3 relative group">
+            <a href="/profile/{user.username}" class="flex items-center">
+              <img 
+                src={profileImage} 
+                alt="Profilbild" 
+                class="h-8 w-8 rounded-full object-cover border-2 border-transparent group-hover:border-blue-500"
+              />
+              <span class="ml-2 text-gray-700 text-sm font-medium group-hover:text-blue-600">
+                {user.username}
+              </span>
+            </a>
+          </div>
+          
           <a 
             href="/logout" 
             class="bg-red-600 text-white hover:bg-red-700 px-3 py-2 rounded-md text-sm font-medium ml-3"
@@ -65,5 +145,10 @@
         {/if}
       </div>
     </div>
+  </div>
+
+  <!-- Mobile-Ansicht für die Suche -->
+  <div class="md:hidden px-4 pb-3">
+    <UserSearch />
   </div>
 </nav>
