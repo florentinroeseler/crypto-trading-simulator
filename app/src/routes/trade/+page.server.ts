@@ -43,7 +43,8 @@ export const load: PageServerLoad = async ({ locals }) => {
       cryptos: cryptosWithBalance,
       user: {
         balance: locals.user.balance,
-        id: locals.user.id
+        id: locals.user.id,
+        username: locals.user.username  // Diese Zeile hinzufügen
       }
     };
   } catch (error) {

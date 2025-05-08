@@ -18,7 +18,7 @@
       <div class="flex items-center">
         <div class="flex-shrink-0 flex items-center">
           <a href="/" class="text-xl font-bold text-blue-600">
-            Crypto Trading Simulator
+            DHBWallet
           </a>
         </div>
         <div class="hidden sm:ml-6 sm:flex sm:space-x-8">

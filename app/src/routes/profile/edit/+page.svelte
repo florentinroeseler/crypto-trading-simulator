@@ -109,7 +109,7 @@
 </script>
   
   <svelte:head>
-    <title>Profil bearbeiten | Crypto Trading Simulator</title>
+    <title>Profil bearbeiten | DHBWallet</title>
   </svelte:head>
   
   <div class="bg-gray-50 min-h-screen">

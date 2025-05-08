@@ -46,7 +46,7 @@
   </script>
   
   <svelte:head>
-    <title>{data.profileUser.username} | Crypto Trading Simulator</title>
+    <title>{data.profileUser.username} | DHBWallet</title>
   </svelte:head>
   
   <div class="bg-gray-50 min-h-screen">

@@ -124,7 +124,7 @@
   </script>
   
   <svelte:head>
-    <title>Transaktionsverlauf | Crypto Trading Simulator</title>
+    <title>Transaktionsverlauf | DHBWallet</title>
   </svelte:head>
   
   <div class="bg-gray-50 min-h-screen py-8">

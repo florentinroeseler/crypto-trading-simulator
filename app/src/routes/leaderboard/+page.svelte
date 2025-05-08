@@ -36,7 +36,7 @@
   </script>
   
   <svelte:head>
-    <title>Leaderboard | Crypto Trading Simulator</title>
+    <title>Leaderboard | DHBWallet</title>
   </svelte:head>
   
   <div class="bg-gray-50 min-h-screen">

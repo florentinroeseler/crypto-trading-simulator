@@ -2,7 +2,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
-  import SeedDataButton from '$lib/components/SeedDataButton.svelte';
+  // import SeedDataButton from '$lib/components/SeedDataButton.svelte';
   import PortfolioChart from '$lib/components/PortfolioChart.svelte';
   
   export let data: PageData;
@@ -52,7 +52,7 @@
 </script>
 
 <svelte:head>
-  <title>Dashboard | Crypto Trading Simulator</title>
+  <title>Dashboard | DHBWalle</title>
 </svelte:head>
 
 <div class="bg-gray-50 min-h-screen">

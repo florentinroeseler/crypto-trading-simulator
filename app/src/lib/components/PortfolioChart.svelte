@@ -341,21 +341,24 @@ if (accountStartIndex >= 0 && accountStartIndex < points.length - 1) {
       ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
       ctx.stroke();
       
-      // Wir zeigen weniger Labels, um Überlappungen zu vermeiden
-      const numLabels = 7;
+      // Add this check before calculating label indices
+      const numLabels = Math.min(7, chartData.length);
       const labelIndices = [];
-      for (let i = 0; i < numLabels; i++) {
-        labelIndices.push(Math.floor((i / (numLabels - 1)) * (chartData.length - 1)));
-      }
       
-      // Zeit-Labels
-      labelIndices.forEach(index => {
-        if (index < points.length) {
-          const point = points[index];
-          const timestamp = chartData[index].timestamp;
-          ctx.fillText(formatDate(timestamp), point.x, padding.top + chartHeight + 20);
+      if (numLabels > 1 && chartData.length > 1) {
+        for (let i = 0; i < numLabels; i++) {
+          labelIndices.push(Math.floor((i / (numLabels - 1)) * (chartData.length - 1)));
         }
-      });
+        
+        // Only draw labels if we have valid indices
+        labelIndices.forEach(index => {
+          if (index < points.length) {
+            const point = points[index];
+            const timestamp = chartData[index].timestamp;
+            ctx.fillText(formatDate(timestamp), point.x, padding.top + chartHeight + 20);
+          }
+        });
+      }
       
       // Aktueller Gesamtwert
       if (points.length > 0) {

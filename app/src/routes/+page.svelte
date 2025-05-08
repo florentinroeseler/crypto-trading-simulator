@@ -11,7 +11,7 @@
   <div class="px-6 py-24 sm:px-6 sm:py-32 lg:px-8">
     <div class="mx-auto max-w-2xl text-center">
       <h1 class="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
-        Trading-Simulator
+        DHBWallet
       </h1>
       
       {#if isLoggedIn}
@@ -55,7 +55,7 @@
   <div class="bg-white py-24 sm:py-32">
     <div class="mx-auto max-w-7xl px-6 lg:px-8">
       <div class="mx-auto max-w-2xl lg:text-center">
-        <h2 class="text-base font-semibold leading-7 text-blue-600">Trading-Simulator</h2>
+        <h2 class="text-base font-semibold leading-7 text-blue-600">DHBWallet</h2>
         
         {#if isLoggedIn}
           <p class="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">

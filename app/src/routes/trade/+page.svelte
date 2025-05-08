@@ -67,14 +67,14 @@
   </script>
   
   <svelte:head>
-    <title>Trading | Crypto Trading Simulator</title>
+    <title>Trading | DHBWallet</title>
   </svelte:head>
   
   <div class="bg-gray-50 min-h-screen py-8">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="md:flex md:items-center md:justify-between mb-6">
         <div class="flex-1 min-w-0">
-          <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+          <h1 class="text-2xl font-bold leading-normal text-gray-900 sm:text-3xl sm:truncate">
             Kryptowährungen handeln
           </h1>
           <p class="mt-1 text-sm text-gray-500">
