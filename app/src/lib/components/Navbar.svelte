@@ -8,56 +8,6 @@
   // Benutzer ist nun dynamisch, nicht mehr hartcodiert
   $: isLoggedIn = !!$page.data.user;
   $: user = $page.data.user;
-
-  // Standard-Profilbild, falls keines gesetzt ist
-  const defaultProfileImage = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
-  
-  // Profilbild mit Benutzer-spezifischem Schlüssel
-  let profileImage = defaultProfileImage;
-  
-  // Aktualisiere das Profilbild basierend auf dem angemeldeten Benutzer
-  function updateProfileImageForUser() {
-    if (browser && user) {
-      // Verwende benutzer-spezifischen Schlüssel
-      const storageKey = `userProfileImage_${user.id}`;
-      const storedImage = localStorage.getItem(storageKey);
-      
-      if (storedImage) {
-        profileImage = storedImage;
-      } else if (user.profileImageUrl) {
-        profileImage = user.profileImageUrl;
-      } else {
-        profileImage = defaultProfileImage;
-      }
-    } else {
-      profileImage = defaultProfileImage;
-    }
-  }
-  
-  // Bei Änderung des Benutzers aktualisieren
-  $: if (user) {
-    updateProfileImageForUser();
-  }
-  
-  onMount(() => {
-    updateProfileImageForUser();
-    
-    // Event-Listener für Profilbild-Updates
-    window.addEventListener('profileImageUpdated', (event) => {
-      // @ts-ignore - Custom-Event-Handling
-      const newImageUrl = event.detail.profileImageUrl;
-      const userId = event.detail.userId;
-      
-      // Nur aktualisieren, wenn es der aktuelle Benutzer ist
-      if (user && userId === user.id && newImageUrl) {
-        profileImage = newImageUrl;
-      }
-    });
-    
-    return () => {
-      window.removeEventListener('profileImageUpdated', null);
-    };
-  });
 </script>
 
 <!-- Rest des Codes bleibt unverändert -->
@@ -109,15 +59,10 @@
             Dashboard
           </a>
           
-          <!-- Profilbild und Username mit Dropdown -->
+          <!-- Nur Username anzeigen -->
           <div class="ml-3 relative group">
             <a href="/profile/{user.username}" class="flex items-center">
-              <img 
-                src={profileImage} 
-                alt="Profilbild" 
-                class="h-8 w-8 rounded-full object-cover border-2 border-transparent group-hover:border-blue-500"
-              />
-              <span class="ml-2 text-gray-700 text-sm font-medium group-hover:text-blue-600">
+              <span class="text-gray-700 text-sm font-medium group-hover:text-blue-600">
                 {user.username}
               </span>
             </a>

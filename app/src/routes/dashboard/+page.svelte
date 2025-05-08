@@ -59,7 +59,7 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     
     <!-- Testdaten-Generator (nur anzeigen, wenn keine Portfoliodaten vorhanden sind) -->
-    {#if !hasPortfolioData}
+    <!-- {#if !hasPortfolioData}
       <div class="bg-white rounded-lg shadow p-6 mb-6">
         <h2 class="text-lg font-medium text-gray-900 mb-2">Keine Portfolio-Daten gefunden</h2>
         <p class="text-gray-600 mb-4">
@@ -69,7 +69,7 @@
         
         <SeedDataButton />
       </div>
-    {/if}
+    {/if} -->
     
     <!-- Übersichtskarten -->
     <div class="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-3">

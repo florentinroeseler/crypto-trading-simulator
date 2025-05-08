@@ -8,6 +8,7 @@
     let email = '';
     let password = '';
     let isLoading = false;
+    let localError = ''; // Lokale Fehlervariable
   </script>
   
   <div class="flex min-h-screen flex-col items-center justify-center px-6 py-12 bg-gray-50">
@@ -24,19 +25,29 @@
       <div class="bg-white p-8 shadow-md rounded-lg">
         <form method="POST" use:enhance={() => {
           isLoading = true;
+          localError = ''; // Fehler zurücksetzen
+          
           return async ({ result }) => {
             isLoading = false;
+            console.log('Form result:', result);
+            
             if (result.type === 'success' && result.data?.success) {
-              // Vollständige Seitenaktualisierung anstelle von goto
               window.location.href = '/dashboard';
+            } else if (result.type === 'failure') {
+              // Fehler aus der Antwort extrahieren und lokal speichern
+              if (result.data?.error) {
+                localError = result.data.error;
+              } else {
+                localError = 'Ein unbekannter Fehler ist aufgetreten';
+              }
             }
           };
         }}>
-            {#if form?.error}
-              <div class="mb-4 p-4 text-sm rounded-md bg-red-50 text-red-600">
-                {form.error}
-              </div>
-            {/if}
+          {#if form?.error || localError}
+            <div class="mb-4 p-4 text-sm rounded-md bg-red-50 text-red-600">
+              {form?.error || localError}
+            </div>
+          {/if}
           
           <div class="mb-4">
             <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
