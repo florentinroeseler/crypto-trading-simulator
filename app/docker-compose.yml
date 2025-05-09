@@ -7,17 +7,25 @@ services:
       dockerfile: Dockerfile
     ports:
       - '5173:5173'
+      - '24678:24678' # Vite HMR port
     environment:
       - DATABASE_URL=postgres://user:password@db:5432/trading_simulator
       - NODE_ENV=development
       - HOST=0.0.0.0
       - PORT=5173
+      - VITE_ALLOW_WARNINGS=true
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY}
+      - NODE_OPTIONS=--experimental-specifier-resolution=node
     volumes:
-      - .:/app
-      - /app/node_modules
+      - .:/app:delegated
+      # Entferne die node_modules Zeile
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - trading-network
+    command: sh -c "./scripts/start-app.sh"
 
   db:
     image: postgres:15-alpine
@@ -28,8 +36,19 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_DB=trading_simulator
     ports:
-      - '543:5432'
+      - '5433:5432'
     restart: unless-stopped
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d trading_simulator"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  trading-network:
+    driver: bridge
 
 volumes:
   postgres_data:

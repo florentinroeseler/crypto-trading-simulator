@@ -17,7 +17,8 @@
 		"db:migrate": "tsx src/lib/server/db/migrate.ts",
 		"db:seed": "tsx src/lib/server/db/seed.ts",
 		"db:studio": "drizzle-kit studio",
-		"db:drop": "drizzle-kit drop"
+		"db:drop": "drizzle-kit drop",
+		"migrate": "node --loader ts-node/esm --experimental-specifier-resolution=node ./src/lib/server/db/migrate.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.5",
@@ -52,6 +53,7 @@
 		"@oslojs/encoding": "^1.1.0",
 		"dotenv": "^16.4.7",
 		"drizzle-orm": "^0.40.1",
+		"oslo": "^1.2.1",
 		"postgres": "^3.4.5"
 	}
 }
