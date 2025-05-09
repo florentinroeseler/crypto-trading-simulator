@@ -1,4 +1,3 @@
-// src/routes/trade/+page.server.ts
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
@@ -17,7 +16,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       .select()
       .from(assets)
       .orderBy(assets.name);
-    
+
     // Hole das Portfolio des Benutzers für die Anzeige der Bestände
     const userPortfolio = await db
       .select({
@@ -26,13 +25,13 @@ export const load: PageServerLoad = async ({ locals }) => {
       })
       .from(portfolios)
       .where(eq(portfolios.userId, locals.user.id));
-    
+
     // Erstelle ein Map des Portfolios für einfachen Zugriff
     const portfolioMap = new Map();
     userPortfolio.forEach(entry => {
       portfolioMap.set(entry.assetId, entry.quantity);
     });
-    
+
     // Füge Bestandsinformationen zu den Kryptowährungen hinzu
     const cryptosWithBalance = cryptos.map(crypto => ({
       ...crypto,

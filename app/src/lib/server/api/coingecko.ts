@@ -1,4 +1,3 @@
-// src/lib/server/api/coingecko.ts
 import { env } from '$env/dynamic/private';
 import { assetPrices, assets } from '$lib/server/db/schema';
 import { db } from '$lib/server/db';
@@ -115,7 +114,7 @@ export class CoinGeckoAPI {
         const geckoData = symbolToData.get(symbol);
         
         if (geckoData) {
-          /* 1) live‑Preis ins assets‑Table schreiben -------------------- */
+          // live‑Preis ins assets‑Table schreiben
           await db.update(assets)
             .set({
               currentPrice: geckoData.current_price,
@@ -132,7 +131,7 @@ export class CoinGeckoAPI {
             })
             .where(eq(assets.id, asset.id));
 
-          /* 2) Preis‑Snapshot in asset_prices loggen -------------------- */
+          // Preis‑Snapshot in asset_prices loggen
           await db
             .insert(assetPrices)
             .values({
@@ -159,6 +158,7 @@ export class CoinGeckoAPI {
 
   /**
    * Importiert neue Kryptowährungen in die Datenbank
+   * Wird eigentlich nicht aktiv verwendet, macht das Leben aber leicht, wenn später das Angebot der Kryptos erweitert werden soll
    */
   async importTopCryptocurrencies(limit = 20): Promise<number> {
     try {

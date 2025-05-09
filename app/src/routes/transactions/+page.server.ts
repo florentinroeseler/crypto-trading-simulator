@@ -1,9 +1,8 @@
-// src/routes/transactions/+page.server.ts
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { transactions, assets } from '$lib/server/db/schema';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { eq, desc, asc } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   // Prüfe, ob der Benutzer angemeldet ist
@@ -86,7 +85,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
           .select({ id: assets.id })
           .from(assets)
           .where(eq(assets.symbol, filterAsset.toUpperCase()));
-        
+
         if (assetIds.length > 0) {
           // Verwende die Asset-IDs im Filter
           countQuery = countQuery.where(
@@ -121,7 +120,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     const totalBuyVolume = transactionsList
       .filter(t => t.type === 'buy')
       .reduce((sum, t) => sum + t.total, 0);
-      
+
     const totalSellVolume = transactionsList
       .filter(t => t.type === 'sell')
       .reduce((sum, t) => sum + t.total, 0);

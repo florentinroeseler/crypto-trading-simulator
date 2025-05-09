@@ -1,4 +1,4 @@
-// src/lib/server/db/schema.ts
+// Diese Datei entält die Definition des Datenbank-Schemas
 import { pgTable, text, uuid, timestamp, doublePrecision, boolean, index } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -32,7 +32,6 @@ export const assets = pgTable("assets", {
   currentPrice: doublePrecision("current_price").notNull(),
   lastUpdated: timestamp("last_updated").defaultNow().notNull(),
   imageUrl: text("image_url"),
-  // Neue Felder für erweiterte Crypto-Informationen
   marketCap: doublePrecision("market_cap"),
   priceChangePercentage24h: doublePrecision("price_change_percentage_24h"),
   volume24h: doublePrecision("volume_24h"),
@@ -72,19 +71,18 @@ export const transactions = pgTable("transactions", {
 export const assetPrices = pgTable(
   'asset_prices',
   {
-    id:        uuid('id').primaryKey().defaultRandom().notNull(),
-    assetId:   uuid('asset_id')
-                 .notNull()
-                 .references(() => assets.id, { onDelete: 'cascade' }),
-    price:     doublePrecision('price').notNull(),
+    id: uuid('id').primaryKey().defaultRandom().notNull(),
+    assetId: uuid('asset_id')
+      .notNull()
+      .references(() => assets.id, { onDelete: 'cascade' }),
+    price: doublePrecision('price').notNull(),
     timestamp: timestamp('timestamp').notNull(),
   },
   (table) => ({
-    /** <<< ALLE Indizes gehören HIER hinein >>> */
-    assetIdx:     index('idx_asset_prices_asset').on(table.assetId),
-    assetTsIdx:   index('idx_asset_prices_asset_ts').on(
-                    table.assetId,
-                    table.timestamp,
-                  ),
+    assetIdx: index('idx_asset_prices_asset').on(table.assetId),
+    assetTsIdx: index('idx_asset_prices_asset_ts').on(
+      table.assetId,
+      table.timestamp,
+    ),
   }),
 );

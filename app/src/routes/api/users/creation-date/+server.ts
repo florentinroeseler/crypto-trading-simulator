@@ -1,4 +1,3 @@
-// src/routes/api/user/creation-date/+server.ts
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';

@@ -1,4 +1,3 @@
-// src/hooks.server.ts
 import { lucia } from '$lib/server/auth';
 import { coinGeckoAPI } from '$lib/server/api/coingecko';
 import { building } from '$app/environment';
@@ -17,13 +16,13 @@ let updateJobActive = false;
  */
 function startPriceUpdateJob() {
   if (updateJobActive) return;
-  
+
   updateJobActive = true;
   console.log(`Preisupdate-Job gestartet. Intervall: ${UPDATE_INTERVAL}ms`);
-  
+
   // Initiales Update nach einer kurzen Verzögerung beim Start (um Server-Start nicht zu blockieren)
   setTimeout(updatePrices, 10000);
-  
+
   // Regelmäßige Updates einrichten
   setInterval(updatePrices, UPDATE_INTERVAL);
 }
@@ -38,7 +37,7 @@ async function updatePrices() {
     console.log('Preisaktualisierung abgeschlossen');
   } catch (error) {
     console.error('Fehler bei der automatischen Preisaktualisierung:', error);
-    
+
     // Bei Rate-Limit-Fehler längere Pause einlegen
     if (error.message && error.message.includes('Rate-Limit')) {
       console.log('Rate-Limit erreicht, nächste Aktualisierung erfolgt beim nächsten Intervall');
@@ -57,7 +56,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   console.log('Session cookie:', event.cookies.get(lucia.sessionCookieName));
   // Hole das Sitzungs-Cookie
   const sessionId = event.cookies.get(lucia.sessionCookieName);
-  
+
   if (!sessionId) {
     // Keine Sitzung gefunden
     event.locals.user = null;
@@ -67,7 +66,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   // Validiere die Sitzung
   const { session, user } = await lucia.validateSession(sessionId);
-  
+
   if (session && session.fresh) {
     // Wenn die Sitzung erneuert wurde, setze ein neues Cookie
     const sessionCookie = lucia.createSessionCookie(session.id);
@@ -76,7 +75,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       ...sessionCookie.attributes
     });
   }
-  
+
   if (!session) {
     // Ungültige Sitzung, lösche das Cookie
     const sessionCookie = lucia.createBlankSessionCookie();
@@ -85,13 +84,13 @@ export const handle: Handle = async ({ event, resolve }) => {
       ...sessionCookie.attributes
     });
   }
-  
+
   // Speichere Benutzer und Sitzung in den lokalen Variablen
   event.locals.user = user;
   event.locals.session = session;
 
   console.log('User after validation:', !!user);
-  
+
   // Löse die Anfrage auf
   return resolve(event);
 };

@@ -8,7 +8,7 @@ dotenv.config();
 
 const runMigrations = async () => {
   const connectionString = process.env.DATABASE_URL;
-  
+
   if (!connectionString) {
     console.error('DATABASE_URL ist nicht gesetzt. Bitte stelle sicher, dass die Umgebungsvariable korrekt konfiguriert ist.');
     process.exit(1);
@@ -16,15 +16,15 @@ const runMigrations = async () => {
 
   // Erstelle den Migrations-Client mit direkter Verbindung
   const migrationClient = postgres(connectionString, { max: 1 });
-  
+
   try {
     console.log('Starte Datenbankmigrationen...');
-    
+
     // Führe Migrationen aus
     await migrate(drizzle(migrationClient), {
       migrationsFolder: 'migrations'
     });
-    
+
     console.log('Migrationen erfolgreich abgeschlossen.');
   } catch (error) {
     console.error('Fehler bei der Migration:', error);

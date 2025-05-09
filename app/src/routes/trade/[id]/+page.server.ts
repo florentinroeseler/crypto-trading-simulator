@@ -1,4 +1,3 @@
-// src/routes/trade/[id]/+page.server.ts
 import { redirect, error } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { db } from '$lib/server/db';
@@ -62,7 +61,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       recentTransactions,
       user: {
         balance: locals.user.balance,
-        id: locals.user.id
+        id: locals.user.id,
+        username: locals.user.username  // Diese Zeile hinzufügen
       }
     };
   } catch (e) {
@@ -183,7 +183,7 @@ async function handleBuy(user, cryptoAsset, quantity, total) {
       // Portfolio aktualisieren
       const portfolio = existingPortfolio[0];
       const newQuantity = portfolio.quantity + quantity;
-      const newAverageBuyPrice = 
+      const newAverageBuyPrice =
         ((portfolio.quantity * portfolio.averageBuyPrice) + total) / newQuantity;
 
       await tx

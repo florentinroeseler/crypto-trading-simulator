@@ -1,4 +1,3 @@
-// src/routes/leaderboard/+page.server.ts
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
@@ -45,14 +44,14 @@ export const load: PageServerLoad = async ({ locals }) => {
           const value = item.quantity * item.currentPrice;
           const cost = item.quantity * item.averageBuyPrice;
           const profitLoss = value - cost;
-          
+
           totalValue += value;
           totalCost += cost;
           totalProfitLoss += profitLoss;
         });
 
         // Berechne prozentuale Performance
-        const profitLossPercentage = totalCost > 0 
+        const profitLossPercentage = totalCost > 0
           ? (totalProfitLoss / totalCost) * 100
           : 0;
 

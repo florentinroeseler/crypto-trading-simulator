@@ -20,12 +20,12 @@ import { eq, and, gte, inArray } from "drizzle-orm";
  */
 export async function GET({ locals, url }) {
   try {
-    /* ─────────────────────── Sicherheit ─────────────────────── */
+    // Unautrorisierte Zugriffe abfangen
     if (!locals.user) {
       return json({ success: false, message: "Nicht autorisiert" }, { status: 401 });
     }
 
-    /* ─────────────── Ziel-Benutzer bestimmen ────────────────── */
+    // Prüfen, ob der Benutzer existiert
     const requestedUserId = url.searchParams.get("userId");
     const targetUserId = requestedUserId || locals.user.id;
 
@@ -46,7 +46,7 @@ export async function GET({ locals, url }) {
       }
     }
 
-    /* ─────────────────── Nutzerdaten laden ──────────────────── */
+    // Nutzerdaten laden
     const userRow = await db
       .select({ createdAt: users.createdAt })
       .from(users)
@@ -59,7 +59,7 @@ export async function GET({ locals, url }) {
 
     const accountCreation = new Date(userRow[0].createdAt);
 
-    /* ────────────────── Zeitraum bestimmen ──────────────────── */
+    // Zeitspanne bestimmen
     const timeframe = url.searchParams.get("timeframe") ?? "30d";
     const now = Date.now();
 
@@ -76,7 +76,7 @@ export async function GET({ locals, url }) {
       }
     })();
 
-    /* ───────────────── Transaktionen laden ──────────────────── */
+    // Transaktionen und Asset-Preise laden
     const userTx = await db
       .select({
         id: transactions.id,
@@ -93,7 +93,7 @@ export async function GET({ locals, url }) {
 
     const userAssetIds = [...new Set(userTx.map((t) => t.assetId))];
 
-    /* ──────────────── aktuelle Asset-Preise (Fallback) ──────────────── */
+    // aktuelle Preise laden
     const currentPrices = await db
       .select({ id: assets.id, price: assets.currentPrice })
       .from(assets)
@@ -102,7 +102,7 @@ export async function GET({ locals, url }) {
     const fallbackPriceMap: Record<string, number> = {};
     currentPrices.forEach((a) => (fallbackPriceMap[a.id] = a.price));
 
-    /* ──────────────── historische Kurse laden ──────────────── */
+    // Historische Preise laden	
     const priceRows = await db
       .select({
         assetId: assetPrices.assetId,
@@ -133,7 +133,7 @@ export async function GET({ locals, url }) {
       return series[0].price; // alle Kurse liegen nach t
     }
 
-    /* ───────────────────── Zeitpunkte bauen ───────────────────── */
+    // Zeipunkte aufbauen
     const DAY = 86_400_000;
     const diffDays = Math.ceil((now - startTime.getTime()) / DAY);
     const interval = diffDays <= 1 ? 5 * 60 * 1_000   // 5 Minuten
@@ -153,7 +153,7 @@ export async function GET({ locals, url }) {
 
     const uniqueTimes = [...new Set(timePoints)].sort((a, b) => a - b);
 
-    /* ───────────────── Portfolio-Historie berechnen ───────────────── */
+    // Portfolio-Historie aufbauen
     type Holding = { qty: number };
     const holdings: Record<string, Holding> = {};
     let cash = 10_000; // Startguthaben
@@ -200,7 +200,7 @@ export async function GET({ locals, url }) {
       });
     }
 
-    /* ─────────────────── Antwort zurückgeben ─────────────────── */
+    // Antwort zurückgeben
     return json({
       success: true,
       data: {

@@ -6,15 +6,15 @@ export const GET: RequestHandler = async ({ locals }) => {
   try {
     // Prüfen, ob der Benutzer ein Admin ist (optional)
     if (locals.user && !locals.user.isAdmin) {
-      return json({ 
-        success: false, 
-        message: 'Nur Administratoren können diesen Endpunkt aufrufen' 
+      return json({
+        success: false,
+        message: 'Nur Administratoren können diesen Endpunkt aufrufen'
       }, { status: 403 });
     }
-    
+
     // Alle Krypto-Preise aktualisieren
     const updatedCount = await coinGeckoAPI.updateAllCryptoPrices();
-    
+
     return json({
       success: true,
       message: `${updatedCount} Kryptowährungen aktualisiert`,

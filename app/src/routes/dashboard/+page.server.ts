@@ -1,4 +1,3 @@
-// src/routes/dashboard/+page.server.ts
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
@@ -26,13 +25,13 @@ export const load: PageServerLoad = async ({ locals }) => {
       .from(portfolios)
       .innerJoin(assets, eq(portfolios.assetId, assets.id))
       .where(eq(portfolios.userId, locals.user.id));
-    
+
     // Berechne zusätzliche Werte für jedes Item
     const portfolioItemsWithValues = portfolioItems.map(item => {
       const value = item.quantity * item.currentPrice;
       const profitLoss = (item.currentPrice - item.averageBuyPrice) * item.quantity;
       const profitLossPercentage = ((item.currentPrice - item.averageBuyPrice) / item.averageBuyPrice) * 100;
-      
+
       return {
         ...item,
         value,
@@ -43,13 +42,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 
     // Berechne Gesamt-Portfoliowert
     const totalPortfolioValue = portfolioItemsWithValues.reduce(
-      (sum, item) => sum + item.value, 
+      (sum, item) => sum + item.value,
       0
     );
 
     // Berechne Gesamtgewinn/-verlust
     const totalProfitLoss = portfolioItemsWithValues.reduce(
-      (sum, item) => sum + item.profitLoss, 
+      (sum, item) => sum + item.profitLoss,
       0
     );
 
@@ -58,8 +57,8 @@ export const load: PageServerLoad = async ({ locals }) => {
       (sum, item) => sum + (item.averageBuyPrice * item.quantity),
       0
     );
-    
-    const profitLossPercentage = totalInvestment > 0 
+
+    const profitLossPercentage = totalInvestment > 0
       ? (totalProfitLoss / totalInvestment) * 100
       : 0;
 

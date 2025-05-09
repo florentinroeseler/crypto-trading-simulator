@@ -1,4 +1,3 @@
-// src/routes/api/upload/+server.ts
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import crypto from 'crypto';
@@ -43,7 +42,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const randomName = crypto.randomBytes(16).toString('hex');
     const fileName = `${randomName}.${fileExtension}`;
     const filePath = path.join(uploadsDir, fileName);
-    
+
     // Speichere die Datei
     const arrayBuffer = await imageFile.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);

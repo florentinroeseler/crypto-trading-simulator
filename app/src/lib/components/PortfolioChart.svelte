@@ -1,752 +1,749 @@
-<!-- src/lib/components/PortfolioChart.svelte -->
+<!-- Chart, der die Portfolio-Entwicklung darstellt, ziemlich ähnlich zu SimpleChart-->
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  
-  // Eigenschaften für den Chart
-  export let balance: number = 0; // Aktuelles Guthaben
-  export let color: string = '#3B82F6'; // Default: Blau
-  export let userId: string = undefined; // Neue Prop für die Benutzer-ID
-  
-  // Intern verwendete Variablen
-  let chartData: any[] = [];
-  let isLoading = true;
-  let errorMessage: string | null = null;
-  let mounted = false;
-  let noDataAvailable = false;
-  
-  // Chart-Konfiguration
-  let timeframe = '30d'; // '1d', '7d', '30d', '90d'
-  let lastTimeframe = timeframe; // Um unnötige Neuladen zu vermeiden
-  
-  // Hover-Status
-  let hoverIndex: number | null = null;
-  let showTooltip = false;
-  let tooltipX = 0;
-  let tooltipY = 0;
-  let tooltipValue = 0;
-  let tooltipDate = '';
-  
-  // Chart-Dimensionen
-  let padding = { top: 20, right: 50, bottom: 30, left: 60 };
-  let chartWidth = 0;
-  let chartHeight = 0;
-  
-  // Formatierungsfunktionen
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  };
-  
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    
-    if (timeframe === '1d') {
-      // Nur Uhrzeit für 1-Tages-Ansicht
-      return new Intl.DateTimeFormat('de-DE', {
-        timeStyle: 'short'
-      }).format(date);
-    } else {
-      // Datum für längere Zeiträume
-      return new Intl.DateTimeFormat('de-DE', {
-        dateStyle: 'short'
-      }).format(date);
-    }
-  };
-  
-  // Vollständiges Datum und Uhrzeit für Tooltip
-  const formatFullDateTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return new Intl.DateTimeFormat('de-DE', {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(date);
-  };
-  
-  // Zeichnen des Charts mit Canvas
-  let canvas: HTMLCanvasElement;
-  let ctx: CanvasRenderingContext2D;
-  let canvasContainer: HTMLDivElement;
-  
-  function drawChart(highlightIndex: number | null = null) {
-    if (!canvas || !chartData || chartData.length === 0) return;
-    
-    ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    const dpr = window.devicePixelRatio || 1;
-    
-    // Canvas-Größe anpassen
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-    
-    // Chart-Dimensionen berechnen
-    chartWidth = rect.width - padding.left - padding.right;
-    chartHeight = rect.height - padding.top - padding.bottom;
-    
-    // Berechne Minimum und Maximum der Werte
-    const portfolioValues = chartData.map(d => d.totalValue);
-    // ----- Neue, adaptive Achsenskalierung --------------------------
-    const rawMin = Math.min(...portfolioValues);
-    const rawMax = Math.max(...portfolioValues);
+	import { onMount, onDestroy } from 'svelte';
 
-    // Schritt 1: Falls keine Schwankung -> kleiner Sicherheitsabstand
-    let minValue = rawMin;
-    let maxValue = rawMax;
+	// Eigenschaften für den Chart
+	export let balance: number = 0; // Aktuelles Guthaben
+	export let color: string = '#3B82F6'; // Default: Blau
+	export let userId: string = undefined; // Neue Prop für die Benutzer-ID
 
-    if (rawMax === rawMin) {
-      minValue -= rawMin * 0.01 || 1; // 1 % bzw. 1 €
-      maxValue += rawMax * 0.01 || 1;
-    } else {
-      // Schritt 2: 10 % Padding ober‑/unterhalb der Daten
-      const padding = (rawMax - rawMin) * 0.10;
-      minValue -= padding;
-      maxValue += padding;
-    }
+	// Intern verwendete Variablen
+	let chartData: any[] = [];
+	let isLoading = true;
+	let errorMessage: string | null = null;
+	let mounted = false;
+	let noDataAvailable = false;
 
-    const valueRange = maxValue - minValue;
-    
-    // Hintergrund löschen
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Grid-Linien zeichnen
-    ctx.strokeStyle = '#f0f0f0';
-    ctx.lineWidth = 1;
-    
-    // Y-Achsen-Werte berechnen (5 Werte gleichmäßig verteilt)
-    /* ----------- Nice‑Ticks‑Generator ------------------- */
-    function niceStep(range: number, targetTicks = 5) {
-      const rough = range / (targetTicks - 1);
-      const pow10 = Math.pow(10, Math.floor(Math.log10(rough)));
-      const candidates = [1, 2, 5, 10];
+	// Chart-Konfiguration
+	let timeframe = '30d'; // '1d', '7d', '30d', '90d'
+	let lastTimeframe = timeframe; // Um unnötige Neuladen zu vermeiden
 
-      for (const m of candidates) {
-        const step = m * pow10;
-        if (rough <= step) return step;
-      }
-      return 10 * pow10;
-    }
-    /* ---------------------------------------------------- */
+	// Hover-Status
+	let hoverIndex: number | null = null;
+	let showTooltip = false;
+	let tooltipX = 0;
+	let tooltipY = 0;
+	let tooltipValue = 0;
+	let tooltipDate = '';
 
-    const step = niceStep(valueRange);
-    const yAxisValues: number[] = [];
+	// Chart-Dimensionen
+	let padding = { top: 20, right: 50, bottom: 30, left: 60 };
+	let chartWidth = 0;
+	let chartHeight = 0;
 
-    for (
-      let v = Math.ceil(minValue / step) * step;
-      v <= maxValue;
-      v += step
-    ) {
-      yAxisValues.push(v);
-    }
+	// Formatierungsfunktionen
+	const formatCurrency = (value: number) => {
+		return new Intl.NumberFormat('de-DE', {
+			style: 'currency',
+			currency: 'EUR',
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2
+		}).format(value);
+	};
 
-    
-    // Grid-Linien für Y-Achse zeichnen
-    for (const value of yAxisValues) {
-      const y = padding.top + chartHeight - ((value - minValue) / valueRange) * chartHeight;
-      
-      ctx.beginPath();
-      ctx.moveTo(padding.left, y);
-      ctx.lineTo(padding.left + chartWidth, y);
-      ctx.stroke();
-      
-      // Y-Achsenbeschriftung
-      ctx.fillStyle = '#666';
-      ctx.font = '10px Arial';
-      ctx.textAlign = 'right';
-      ctx.fillText(formatCurrency(value), padding.left - 10, y + 4);
-    }
-    
-    // Koordinaten für Portfoliowerte berechnen
-    const points = chartData.map((d, i) => {
-      const x = padding.left + (i / (chartData.length - 1)) * chartWidth;
-      const y = padding.top + chartHeight - ((d.totalValue - minValue) / valueRange) * chartHeight;
-      return { 
-        x, 
-        y, 
-        value: d.totalValue, 
-        timestamp: d.timestamp,
-        preAccount: d.preAccount
-      };
-    });
-    
-    // Finde den Index, ab dem das Nutzerkonto existiert
-    const accountStartIndex = chartData.findIndex(d => !d.preAccount);
-    
-    // Zeichne gestrichelte Linie für Zeitpunkte vor Kontoerstellung
-    if (accountStartIndex > 0) {
-      // Pfad für die Fläche unter der Linie vor der Kontoerstellung
-      ctx.beginPath();
-      ctx.moveTo(padding.left, padding.top + chartHeight); // Startpunkt unten links
-      
-      // Zeichne den Pfad bis zum Kontoerstellungspunkt
-      for (let i = 0; i <= accountStartIndex; i++) {
-        const point = points[i];
-        if (i === 0) {
-          ctx.lineTo(point.x, point.y);
-        } else {
-          ctx.lineTo(point.x, point.y);
-        }
-      }
-      
-      // Schließe den Pfad
-      ctx.lineTo(points[accountStartIndex].x, padding.top + chartHeight);
-      ctx.lineTo(padding.left, padding.top + chartHeight);
-      
-      // Fülle mit hellerem Farbverlauf (vor Kontoerstellung)
-      const preGradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
-      preGradient.addColorStop(0, `${color}20`); // 12.5% Transparenz am oberen Rand
-      preGradient.addColorStop(1, `${color}05`); // 2% Transparenz am unteren Rand
-      
-      ctx.fillStyle = preGradient;
-      ctx.fill();
-      
-      // Zeichne gestrichelte Linie für den Zeitraum vor Kontoerstellung
-      ctx.beginPath();
-      ctx.setLineDash([4, 4]); // Gestrichelte Linie
-      ctx.strokeStyle = `${color}80`; // 50% Transparenz
-      ctx.lineWidth = 2;
-      
-      for (let i = 0; i <= accountStartIndex; i++) {
-        const point = points[i];
-        if (i === 0) {
-          ctx.moveTo(point.x, point.y);
-        } else {
-          ctx.lineTo(point.x, point.y);
-        }
-      }
-      
-      ctx.stroke();
-      ctx.setLineDash([]); // Linien-Stil zurücksetzen
-    }
-// Jetzt die Fläche unter der Kurve für den Zeitraum nach Kontoerstellung
-if (accountStartIndex >= 0 && accountStartIndex < points.length - 1) {
-        // Pfad für die Fläche unter der Linie nach der Kontoerstellung
-        ctx.beginPath();
-        
-        const startPoint = points[Math.max(0, accountStartIndex)];
-        ctx.moveTo(startPoint.x, padding.top + chartHeight); // Startpunkt
-        
-        // Zeichne den Pfad ab dem Kontoerstellungspunkt bis zum Ende
-        for (let i = Math.max(0, accountStartIndex); i < points.length; i++) {
-          const point = points[i];
-          ctx.lineTo(point.x, point.y);
-        }
-        
-        // Schließe den Pfad
-        ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
-        ctx.lineTo(startPoint.x, padding.top + chartHeight);
-        
-        // Fülle mit Farbverlauf (nach Kontoerstellung)
-        const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
-        gradient.addColorStop(0, `${color}40`); // 25% Transparenz am oberen Rand
-        gradient.addColorStop(1, `${color}10`); // 5% Transparenz am unteren Rand
-        
-        ctx.fillStyle = gradient;
-        ctx.fill();
-        
-        // Zeichne durchgezogene Linie für den Zeitraum nach Kontoerstellung
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        
-        let isFirstPoint = true;
-        for (let i = Math.max(0, accountStartIndex); i < points.length; i++) {
-          const point = points[i];
-          if (isFirstPoint) {
-            ctx.moveTo(point.x, point.y);
-            isFirstPoint = false;
-          } else {
-            ctx.lineTo(point.x, point.y);
-          }
-        }
-        
-        ctx.stroke();
-      }
-      
-      // Falls das Konto noch nicht erstellt wurde, zeichne einfach die komplette Linie
-      if (accountStartIndex === -1) {
-        // Fläche unter der Kurve füllen
-        ctx.beginPath();
-        ctx.moveTo(padding.left, padding.top + chartHeight);
-        
-        // Zeichne den Pfad
-        points.forEach((point, i) => {
-          if (i === 0) {
-            ctx.lineTo(point.x, point.y);
-          } else {
-            ctx.lineTo(point.x, point.y);
-          }
-        });
-        
-        ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
-        ctx.lineTo(padding.left, padding.top + chartHeight);
-        
-        const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
-        gradient.addColorStop(0, `${color}40`);
-        gradient.addColorStop(1, `${color}10`);
-        
-        ctx.fillStyle = gradient;
-        ctx.fill();
-        
-        // Linie zeichnen
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        
-        points.forEach((point, i) => {
-          if (i === 0) {
-            ctx.moveTo(point.x, point.y);
-          } else {
-            ctx.lineTo(point.x, point.y);
-          }
-        });
-        
-        ctx.stroke();
-      }
-      
-      // Zeichne eine vertikale Linie für den Zeitpunkt der Kontoerstellung
-      if (accountStartIndex > 0) {
-        const accountCreationPoint = points[accountStartIndex];
-        
-        ctx.beginPath();
-        ctx.strokeStyle = '#666';
-        ctx.setLineDash([2, 2]);
-        ctx.lineWidth = 1;
-        ctx.moveTo(accountCreationPoint.x, padding.top);
-        ctx.lineTo(accountCreationPoint.x, padding.top + chartHeight);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        
-        // Beschriftung für den Kontoerstellungszeitpunkt
-        ctx.fillStyle = '#666';
-        ctx.font = '9px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Kontoerstellung', accountCreationPoint.x, padding.top - 5);
-      }
-      
-      // Zeitachse zeichnen
-      ctx.fillStyle = '#666';
-      ctx.font = '10px Arial';
-      ctx.textAlign = 'center';
-      
-      // X-Achsenlinie
-      ctx.strokeStyle = '#ccc';
-      ctx.beginPath();
-      ctx.moveTo(padding.left, padding.top + chartHeight);
-      ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
-      ctx.stroke();
-      
-      // Add this check before calculating label indices
-      const numLabels = Math.min(7, chartData.length);
-      const labelIndices = [];
-      
-      if (numLabels > 1 && chartData.length > 1) {
-        for (let i = 0; i < numLabels; i++) {
-          labelIndices.push(Math.floor((i / (numLabels - 1)) * (chartData.length - 1)));
-        }
-        
-        // Only draw labels if we have valid indices
-        labelIndices.forEach(index => {
-          if (index < points.length) {
-            const point = points[index];
-            const timestamp = chartData[index].timestamp;
-            ctx.fillText(formatDate(timestamp), point.x, padding.top + chartHeight + 20);
-          }
-        });
-      }
-      
-      // Aktueller Gesamtwert
-      if (points.length > 0) {
-        const lastPoint = points[points.length - 1];
-        const lastValue = lastPoint.value;
-        
-        ctx.fillStyle = color;
-        ctx.fillText(formatCurrency(lastValue), padding.left + chartWidth + 30, lastPoint.y);
-        
-        // Punkt am Ende der Linie
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(lastPoint.x, lastPoint.y, 4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      
-      // Wenn ein Punkt hervorgehoben werden soll (Hover)
-      if (highlightIndex !== null && highlightIndex >= 0 && highlightIndex < points.length) {
-        const point = points[highlightIndex];
-        
-        // Vertikale Linie zum hervorgehobenen Punkt
-        ctx.strokeStyle = '#888';
-        ctx.setLineDash([4, 4]); // Gestrichelte Linie
-        ctx.beginPath();
-        ctx.moveTo(point.x, padding.top);
-        ctx.lineTo(point.x, padding.top + chartHeight);
-        ctx.stroke();
-        ctx.setLineDash([]); // Linien-Stil zurücksetzen
-        
-        // Hervorgehobener Punkt größer zeichnen
-        ctx.fillStyle = point.preAccount ? `${color}80` : color;
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Weiße Umrandung
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-    
-    // Mausbewegung über dem Chart verarbeiten
-    function handleMouseMove(event) {
-      if (!chartData.length || !mounted) return;
-      
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      
-      // Prüfen, ob die Maus im Chart-Bereich ist
-      if (mouseX < padding.left || mouseX > (padding.left + chartWidth)) {
-        showTooltip = false;
-        hoverIndex = null;
-        drawChart();
-        return;
-      }
-      
-      // Relativen X-Wert berechnen (0 bis 1)
-      const relativeX = (mouseX - padding.left) / chartWidth;
-      
-      // Nächsten Datenpunkt finden
-      const dataIndex = Math.round(relativeX * (chartData.length - 1));
-      
-      if (dataIndex >= 0 && dataIndex < chartData.length) {
-        hoverIndex = dataIndex;
-        
-        // Gesamtwert
-        const totalValue = chartData[dataIndex].totalValue;
-        const isPreAccount = chartData[dataIndex].preAccount;
-        
-        // Positionsberechnung für den Tooltip
-        const dataPoint = chartData[dataIndex];
-        const minValue = Math.min(...chartData.map(d => d.totalValue)) * 0.95;
-        const maxValue = Math.max(...chartData.map(d => d.totalValue)) * 1.05;
-        const valueRange = maxValue - minValue;
-        
-        const pointY = padding.top + chartHeight - ((totalValue - minValue) / valueRange) * chartHeight;
-        
-        // Tooltip-Informationen aktualisieren
-        tooltipX = mouseX;
-        tooltipY = pointY;
-        tooltipValue = totalValue;
-        tooltipDate = formatFullDateTime(dataPoint.timestamp);
-        
-        showTooltip = true;
-        drawChart(dataIndex);
-      }
-    }
-    
-    function handleMouseLeave() {
-      showTooltip = false;
-      hoverIndex = null;
-      drawChart();
-    }
-    async function fetchPortfolioData() {
-      // Keine Anfrage senden, wenn die Komponente nicht mehr mounted ist
-      if (!mounted) return;
-      
-      // Kein erneutes Laden, wenn der Timeframe gleich ist
-      if (timeframe === lastTimeframe && chartData.length > 0) return;
-      
-      lastTimeframe = timeframe;
-      isLoading = true;
-      errorMessage = null;
-      noDataAvailable = false;
-      
-      try {
-        // API-Endpunkt mit dem gewählten Zeitraum aufrufen
-        const url = userId 
-        ? `/api/portfolio-history?timeframe=${timeframe}&userId=${userId}` 
-        : `/api/portfolio-history?timeframe=${timeframe}`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          throw new Error(`Fehler: ${response.status} ${response.statusText}`);
-        }
-        
-        const responseData = await response.json();
-        
-        // Keine Verarbeitung, wenn die Komponente nicht mehr mounted ist
-        if (!mounted) return;
-        
-        if (!responseData.success) {
-          throw new Error(responseData.message || 'Fehler beim Laden der Portfolio-Daten');
-        }
-        
-        // Daten aufbereiten
-        chartData = responseData.data.history || [];
-        
-        // Wenn keine Daten verfügbar sind, zeige eine entsprechende Meldung an
-        if (chartData.length === 0) {
-          noDataAvailable = true;
-          isLoading = false;
-          return;
-        }
-        
-        // Warten bis der nächste Frame gerendert wurde
-        await new Promise(resolve => setTimeout(resolve, 0));
-        
-        // Keine Verarbeitung, wenn die Komponente nicht mehr mounted ist
-        if (!mounted) return;
-        
-        drawChart();
-      } catch (err) {
-        console.error('Fehler beim Laden der Portfolio-Daten:', err);
-        errorMessage = err.message || 'Fehler beim Laden der Portfolio-Daten';
-      } finally {
-        isLoading = false;
-      }
-    }
-    
-    // Nur Chart aktualisieren, wenn sich der Timeframe ändert
-    $: {
-      if (mounted && timeframe !== lastTimeframe) {
-        fetchPortfolioData();
-      }
-    }
-    
-    // Fenstergrößenänderungen behandeln
-    function handleResize() {
-      if (canvas && chartData.length > 0 && mounted) {
-        drawChart(hoverIndex);
-      }
-    }
-    
-    onMount(() => {
-      mounted = true;
-      window.addEventListener('resize', handleResize);
-      
-      // Event-Listener für Mausbewegungen hinzufügen
-      if (canvas) {
-        canvas.addEventListener('mousemove', handleMouseMove);
-        canvas.addEventListener('mouseleave', handleMouseLeave);
-      }
-      
-      fetchPortfolioData();
-      
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        
-        if (canvas) {
-          canvas.removeEventListener('mousemove', handleMouseMove);
-          canvas.removeEventListener('mouseleave', handleMouseLeave);
-        }
-      };
-    });
-    
-    onDestroy(() => {
-      mounted = false;
-    });
+	const formatDate = (timestamp: number) => {
+		const date = new Date(timestamp);
+
+		if (timeframe === '1d') {
+			// Nur Uhrzeit für 1-Tages-Ansicht
+			return new Intl.DateTimeFormat('de-DE', {
+				timeStyle: 'short'
+			}).format(date);
+		} else {
+			// Datum für längere Zeiträume
+			return new Intl.DateTimeFormat('de-DE', {
+				dateStyle: 'short'
+			}).format(date);
+		}
+	};
+
+	// Vollständiges Datum und Uhrzeit für Tooltip
+	const formatFullDateTime = (timestamp: number) => {
+		const date = new Date(timestamp);
+		return new Intl.DateTimeFormat('de-DE', {
+			dateStyle: 'medium',
+			timeStyle: 'short'
+		}).format(date);
+	};
+
+	// Zeichnen des Charts mit Canvas
+	let canvas: HTMLCanvasElement;
+	let ctx: CanvasRenderingContext2D;
+	let canvasContainer: HTMLDivElement;
+
+	function drawChart(highlightIndex: number | null = null) {
+		if (!canvas || !chartData || chartData.length === 0) return;
+
+		ctx = canvas.getContext('2d');
+		if (!ctx) return;
+
+		const dpr = window.devicePixelRatio || 1;
+
+		// Canvas-Größe anpassen
+		const rect = canvas.getBoundingClientRect();
+		canvas.width = rect.width * dpr;
+		canvas.height = rect.height * dpr;
+		ctx.scale(dpr, dpr);
+
+		// Chart-Dimensionen berechnen
+		chartWidth = rect.width - padding.left - padding.right;
+		chartHeight = rect.height - padding.top - padding.bottom;
+
+		// Berechne Minimum und Maximum der Werte
+		const portfolioValues = chartData.map((d) => d.totalValue);
+		// ----- Neue, adaptive Achsenskalierung --------------------------
+		const rawMin = Math.min(...portfolioValues);
+		const rawMax = Math.max(...portfolioValues);
+
+		// Schritt 1: Falls keine Schwankung -> kleiner Sicherheitsabstand
+		let minValue = rawMin;
+		let maxValue = rawMax;
+
+		if (rawMax === rawMin) {
+			minValue -= rawMin * 0.01 || 1; // 1 % bzw. 1 €
+			maxValue += rawMax * 0.01 || 1;
+		} else {
+			// Schritt 2: 10 % Padding ober‑/unterhalb der Daten
+			const padding = (rawMax - rawMin) * 0.1;
+			minValue -= padding;
+			maxValue += padding;
+		}
+
+		const valueRange = maxValue - minValue;
+
+		// Hintergrund löschen
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+		// Grid-Linien zeichnen
+		ctx.strokeStyle = '#f0f0f0';
+		ctx.lineWidth = 1;
+
+		// Y-Achsen-Werte berechnen (5 Werte gleichmäßig verteilt)
+		/* ----------- Nice‑Ticks‑Generator ------------------- */
+		function niceStep(range: number, targetTicks = 5) {
+			const rough = range / (targetTicks - 1);
+			const pow10 = Math.pow(10, Math.floor(Math.log10(rough)));
+			const candidates = [1, 2, 5, 10];
+
+			for (const m of candidates) {
+				const step = m * pow10;
+				if (rough <= step) return step;
+			}
+			return 10 * pow10;
+		}
+		/* ---------------------------------------------------- */
+
+		const step = niceStep(valueRange);
+		const yAxisValues: number[] = [];
+
+		for (let v = Math.ceil(minValue / step) * step; v <= maxValue; v += step) {
+			yAxisValues.push(v);
+		}
+
+		// Grid-Linien für Y-Achse zeichnen
+		for (const value of yAxisValues) {
+			const y = padding.top + chartHeight - ((value - minValue) / valueRange) * chartHeight;
+
+			ctx.beginPath();
+			ctx.moveTo(padding.left, y);
+			ctx.lineTo(padding.left + chartWidth, y);
+			ctx.stroke();
+
+			// Y-Achsenbeschriftung
+			ctx.fillStyle = '#666';
+			ctx.font = '10px Arial';
+			ctx.textAlign = 'right';
+			ctx.fillText(formatCurrency(value), padding.left - 10, y + 4);
+		}
+
+		// Koordinaten für Portfoliowerte berechnen
+		const points = chartData.map((d, i) => {
+			const x = padding.left + (i / (chartData.length - 1)) * chartWidth;
+			const y = padding.top + chartHeight - ((d.totalValue - minValue) / valueRange) * chartHeight;
+			return {
+				x,
+				y,
+				value: d.totalValue,
+				timestamp: d.timestamp,
+				preAccount: d.preAccount
+			};
+		});
+
+		// Finde den Index, ab dem das Nutzerkonto existiert
+		const accountStartIndex = chartData.findIndex((d) => !d.preAccount);
+
+		// Zeichne gestrichelte Linie für Zeitpunkte vor Kontoerstellung
+		if (accountStartIndex > 0) {
+			// Pfad für die Fläche unter der Linie vor der Kontoerstellung
+			ctx.beginPath();
+			ctx.moveTo(padding.left, padding.top + chartHeight); // Startpunkt unten links
+
+			// Zeichne den Pfad bis zum Kontoerstellungspunkt
+			for (let i = 0; i <= accountStartIndex; i++) {
+				const point = points[i];
+				if (i === 0) {
+					ctx.lineTo(point.x, point.y);
+				} else {
+					ctx.lineTo(point.x, point.y);
+				}
+			}
+
+			// Schließe den Pfad
+			ctx.lineTo(points[accountStartIndex].x, padding.top + chartHeight);
+			ctx.lineTo(padding.left, padding.top + chartHeight);
+
+			// Fülle mit hellerem Farbverlauf (vor Kontoerstellung)
+			const preGradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
+			preGradient.addColorStop(0, `${color}20`); // 12.5% Transparenz am oberen Rand
+			preGradient.addColorStop(1, `${color}05`); // 2% Transparenz am unteren Rand
+
+			ctx.fillStyle = preGradient;
+			ctx.fill();
+
+			// Zeichne gestrichelte Linie für den Zeitraum vor Kontoerstellung
+			ctx.beginPath();
+			ctx.setLineDash([4, 4]); // Gestrichelte Linie
+			ctx.strokeStyle = `${color}80`; // 50% Transparenz
+			ctx.lineWidth = 2;
+
+			for (let i = 0; i <= accountStartIndex; i++) {
+				const point = points[i];
+				if (i === 0) {
+					ctx.moveTo(point.x, point.y);
+				} else {
+					ctx.lineTo(point.x, point.y);
+				}
+			}
+
+			ctx.stroke();
+			ctx.setLineDash([]); // Linien-Stil zurücksetzen
+		}
+		// Jetzt die Fläche unter der Kurve für den Zeitraum nach Kontoerstellung
+		if (accountStartIndex >= 0 && accountStartIndex < points.length - 1) {
+			// Pfad für die Fläche unter der Linie nach der Kontoerstellung
+			ctx.beginPath();
+
+			const startPoint = points[Math.max(0, accountStartIndex)];
+			ctx.moveTo(startPoint.x, padding.top + chartHeight); // Startpunkt
+
+			// Zeichne den Pfad ab dem Kontoerstellungspunkt bis zum Ende
+			for (let i = Math.max(0, accountStartIndex); i < points.length; i++) {
+				const point = points[i];
+				ctx.lineTo(point.x, point.y);
+			}
+
+			// Schließe den Pfad
+			ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+			ctx.lineTo(startPoint.x, padding.top + chartHeight);
+
+			// Fülle mit Farbverlauf (nach Kontoerstellung)
+			const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
+			gradient.addColorStop(0, `${color}40`); // 25% Transparenz am oberen Rand
+			gradient.addColorStop(1, `${color}10`); // 5% Transparenz am unteren Rand
+
+			ctx.fillStyle = gradient;
+			ctx.fill();
+
+			// Zeichne durchgezogene Linie für den Zeitraum nach Kontoerstellung
+			ctx.beginPath();
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 2;
+
+			let isFirstPoint = true;
+			for (let i = Math.max(0, accountStartIndex); i < points.length; i++) {
+				const point = points[i];
+				if (isFirstPoint) {
+					ctx.moveTo(point.x, point.y);
+					isFirstPoint = false;
+				} else {
+					ctx.lineTo(point.x, point.y);
+				}
+			}
+
+			ctx.stroke();
+		}
+
+		// Falls das Konto noch nicht erstellt wurde, zeichne einfach die komplette Linie
+		if (accountStartIndex === -1) {
+			// Fläche unter der Kurve füllen
+			ctx.beginPath();
+			ctx.moveTo(padding.left, padding.top + chartHeight);
+
+			// Zeichne den Pfad
+			points.forEach((point, i) => {
+				if (i === 0) {
+					ctx.lineTo(point.x, point.y);
+				} else {
+					ctx.lineTo(point.x, point.y);
+				}
+			});
+
+			ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+			ctx.lineTo(padding.left, padding.top + chartHeight);
+
+			const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
+			gradient.addColorStop(0, `${color}40`);
+			gradient.addColorStop(1, `${color}10`);
+
+			ctx.fillStyle = gradient;
+			ctx.fill();
+
+			// Linie zeichnen
+			ctx.beginPath();
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 2;
+
+			points.forEach((point, i) => {
+				if (i === 0) {
+					ctx.moveTo(point.x, point.y);
+				} else {
+					ctx.lineTo(point.x, point.y);
+				}
+			});
+
+			ctx.stroke();
+		}
+
+		// Zeichne eine vertikale Linie für den Zeitpunkt der Kontoerstellung
+		if (accountStartIndex > 0) {
+			const accountCreationPoint = points[accountStartIndex];
+
+			ctx.beginPath();
+			ctx.strokeStyle = '#666';
+			ctx.setLineDash([2, 2]);
+			ctx.lineWidth = 1;
+			ctx.moveTo(accountCreationPoint.x, padding.top);
+			ctx.lineTo(accountCreationPoint.x, padding.top + chartHeight);
+			ctx.stroke();
+			ctx.setLineDash([]);
+
+			// Beschriftung für den Kontoerstellungszeitpunkt
+			ctx.fillStyle = '#666';
+			ctx.font = '9px Arial';
+			ctx.textAlign = 'center';
+			ctx.fillText('Kontoerstellung', accountCreationPoint.x, padding.top - 5);
+		}
+
+		// Zeitachse zeichnen
+		ctx.fillStyle = '#666';
+		ctx.font = '10px Arial';
+		ctx.textAlign = 'center';
+
+		// X-Achsenlinie
+		ctx.strokeStyle = '#ccc';
+		ctx.beginPath();
+		ctx.moveTo(padding.left, padding.top + chartHeight);
+		ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+		ctx.stroke();
+
+		// Prüfung, ob genügend Daten vorhanden sind, um die X-Achse zu beschriften
+		const numLabels = Math.min(7, chartData.length);
+		const labelIndices = [];
+
+		if (numLabels > 1 && chartData.length > 1) {
+			for (let i = 0; i < numLabels; i++) {
+				labelIndices.push(Math.floor((i / (numLabels - 1)) * (chartData.length - 1)));
+			}
+
+			// Nur die X-Achsenbeschriftungen für die Zeitpunkte, die auch Daten haben
+			labelIndices.forEach((index) => {
+				if (index < points.length) {
+					const point = points[index];
+					const timestamp = chartData[index].timestamp;
+					ctx.fillText(formatDate(timestamp), point.x, padding.top + chartHeight + 20);
+				}
+			});
+		}
+
+		// Aktueller Gesamtwert
+		if (points.length > 0) {
+			const lastPoint = points[points.length - 1];
+			const lastValue = lastPoint.value;
+
+			ctx.fillStyle = color;
+			ctx.fillText(formatCurrency(lastValue), padding.left + chartWidth + 30, lastPoint.y);
+
+			// Punkt am Ende der Linie
+			ctx.fillStyle = color;
+			ctx.beginPath();
+			ctx.arc(lastPoint.x, lastPoint.y, 4, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		// Wenn ein Punkt hervorgehoben werden soll (Hover)
+		if (highlightIndex !== null && highlightIndex >= 0 && highlightIndex < points.length) {
+			const point = points[highlightIndex];
+
+			// Vertikale Linie zum hervorgehobenen Punkt
+			ctx.strokeStyle = '#888';
+			ctx.setLineDash([4, 4]); // Gestrichelte Linie
+			ctx.beginPath();
+			ctx.moveTo(point.x, padding.top);
+			ctx.lineTo(point.x, padding.top + chartHeight);
+			ctx.stroke();
+			ctx.setLineDash([]); // Linien-Stil zurücksetzen
+
+			// Hervorgehobener Punkt größer zeichnen
+			ctx.fillStyle = point.preAccount ? `${color}80` : color;
+			ctx.beginPath();
+			ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+			ctx.fill();
+
+			// Weiße Umrandung
+			ctx.strokeStyle = 'white';
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+			ctx.stroke();
+		}
+	}
+
+	// Mausbewegung über dem Chart verarbeiten
+	function handleMouseMove(event) {
+		if (!chartData.length || !mounted) return;
+
+		const rect = canvas.getBoundingClientRect();
+		const mouseX = event.clientX - rect.left;
+
+		// Prüfen, ob die Maus im Chart-Bereich ist
+		if (mouseX < padding.left || mouseX > padding.left + chartWidth) {
+			showTooltip = false;
+			hoverIndex = null;
+			drawChart();
+			return;
+		}
+
+		// Relativen X-Wert berechnen (0 bis 1)
+		const relativeX = (mouseX - padding.left) / chartWidth;
+
+		// Nächsten Datenpunkt finden
+		const dataIndex = Math.round(relativeX * (chartData.length - 1));
+
+		if (dataIndex >= 0 && dataIndex < chartData.length) {
+			hoverIndex = dataIndex;
+
+			// Gesamtwert
+			const totalValue = chartData[dataIndex].totalValue;
+			const isPreAccount = chartData[dataIndex].preAccount;
+
+			// Positionsberechnung für den Tooltip
+			const dataPoint = chartData[dataIndex];
+			const minValue = Math.min(...chartData.map((d) => d.totalValue)) * 0.95;
+			const maxValue = Math.max(...chartData.map((d) => d.totalValue)) * 1.05;
+			const valueRange = maxValue - minValue;
+
+			const pointY =
+				padding.top + chartHeight - ((totalValue - minValue) / valueRange) * chartHeight;
+
+			// Tooltip-Informationen aktualisieren
+			tooltipX = mouseX;
+			tooltipY = pointY;
+			tooltipValue = totalValue;
+			tooltipDate = formatFullDateTime(dataPoint.timestamp);
+
+			showTooltip = true;
+			drawChart(dataIndex);
+		}
+	}
+
+	function handleMouseLeave() {
+		showTooltip = false;
+		hoverIndex = null;
+		drawChart();
+	}
+	async function fetchPortfolioData() {
+		// Keine Anfrage senden, wenn die Komponente nicht mehr mounted ist
+		if (!mounted) return;
+
+		// Kein erneutes Laden, wenn der Timeframe gleich ist
+		if (timeframe === lastTimeframe && chartData.length > 0) return;
+
+		lastTimeframe = timeframe;
+		isLoading = true;
+		errorMessage = null;
+		noDataAvailable = false;
+
+		try {
+			// API-Endpunkt mit dem gewählten Zeitraum aufrufen
+			const url = userId
+				? `/api/portfolio-history?timeframe=${timeframe}&userId=${userId}`
+				: `/api/portfolio-history?timeframe=${timeframe}`;
+			const response = await fetch(url);
+
+			if (!response.ok) {
+				throw new Error(`Fehler: ${response.status} ${response.statusText}`);
+			}
+
+			const responseData = await response.json();
+
+			// Keine Verarbeitung, wenn die Komponente nicht mehr mounted ist
+			if (!mounted) return;
+
+			if (!responseData.success) {
+				throw new Error(responseData.message || 'Fehler beim Laden der Portfolio-Daten');
+			}
+
+			// Daten aufbereiten
+			chartData = responseData.data.history || [];
+
+			// Wenn keine Daten verfügbar sind, zeige eine entsprechende Meldung an
+			if (chartData.length === 0) {
+				noDataAvailable = true;
+				isLoading = false;
+				return;
+			}
+
+			// Warten bis der nächste Frame gerendert wurde
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			// Keine Verarbeitung, wenn die Komponente nicht mehr mounted ist
+			if (!mounted) return;
+
+			drawChart();
+		} catch (err) {
+			console.error('Fehler beim Laden der Portfolio-Daten:', err);
+			errorMessage = err.message || 'Fehler beim Laden der Portfolio-Daten';
+		} finally {
+			isLoading = false;
+		}
+	}
+
+	// Nur Chart aktualisieren, wenn sich der Timeframe ändert
+	$: {
+		if (mounted && timeframe !== lastTimeframe) {
+			fetchPortfolioData();
+		}
+	}
+
+	// Fenstergrößenänderungen behandeln
+	function handleResize() {
+		if (canvas && chartData.length > 0 && mounted) {
+			drawChart(hoverIndex);
+		}
+	}
+
+	onMount(() => {
+		mounted = true;
+		window.addEventListener('resize', handleResize);
+
+		// Event-Listener für Mausbewegungen hinzufügen
+		if (canvas) {
+			canvas.addEventListener('mousemove', handleMouseMove);
+			canvas.addEventListener('mouseleave', handleMouseLeave);
+		}
+
+		fetchPortfolioData();
+
+		return () => {
+			window.removeEventListener('resize', handleResize);
+
+			if (canvas) {
+				canvas.removeEventListener('mousemove', handleMouseMove);
+				canvas.removeEventListener('mouseleave', handleMouseLeave);
+			}
+		};
+	});
+
+	onDestroy(() => {
+		mounted = false;
+	});
 </script>
-  
+
 <div class="chart-container">
-  <div class="chart-header">
-    <h2 class="chart-title">Portfolio-Entwicklung</h2>
-    
-    <div class="timeframe-selector">
-      <button 
-        class="timeframe-btn" 
-        class:active={timeframe === '1d'} 
-        on:click={() => timeframe = '1d'}
-      >
-        1T
-      </button>
-      <button 
-        class="timeframe-btn" 
-        class:active={timeframe === '7d'} 
-        on:click={() => timeframe = '7d'}
-      >
-        7T
-      </button>
-      <button 
-        class="timeframe-btn" 
-        class:active={timeframe === '30d'} 
-        on:click={() => timeframe = '30d'}
-      >
-        30T
-      </button>
-      <button 
-        class="timeframe-btn" 
-        class:active={timeframe === '90d'} 
-        on:click={() => timeframe = '90d'}
-      >
-        90T
-      </button>
-    </div>
-  </div>
-  
-  <div class="chart-content" bind:this={canvasContainer}>
-    {#if isLoading && chartData.length === 0}
-      <div class="loading">Lade Portfolio-Daten...</div>
-    {:else if errorMessage}
-      <div class="warning">
-        <p>{errorMessage}</p>
-      </div>
-    {:else if noDataAvailable}
-      <div class="no-data">
-        <p>Keine Portfolio-Daten für diesen Zeitraum verfügbar</p>
-      </div>
-    {/if}
-    
-    <canvas bind:this={canvas} width="800" height="400"></canvas>
-    
-    <!-- Tooltip für Hover-Funktion -->
-    {#if showTooltip && hoverIndex !== null}
-      <div 
-        class="tooltip" 
-        style="left: {tooltipX}px; top: {tooltipY - 60}px;"
-      >
-        <div class="tooltip-date">{tooltipDate}</div>
-        <div class="tooltip-value">{formatCurrency(tooltipValue)}</div>
-        {#if chartData[hoverIndex] && chartData[hoverIndex].preAccount}
-          <div class="tooltip-info">Vor Kontoerstellung</div>
-        {/if}
-      </div>
-    {/if}
-  </div>
+	<div class="chart-header">
+		<h2 class="chart-title">Portfolio-Entwicklung</h2>
+
+		<div class="timeframe-selector">
+			<button
+				class="timeframe-btn"
+				class:active={timeframe === '1d'}
+				on:click={() => (timeframe = '1d')}
+			>
+				1T
+			</button>
+			<button
+				class="timeframe-btn"
+				class:active={timeframe === '7d'}
+				on:click={() => (timeframe = '7d')}
+			>
+				7T
+			</button>
+			<button
+				class="timeframe-btn"
+				class:active={timeframe === '30d'}
+				on:click={() => (timeframe = '30d')}
+			>
+				30T
+			</button>
+			<button
+				class="timeframe-btn"
+				class:active={timeframe === '90d'}
+				on:click={() => (timeframe = '90d')}
+			>
+				90T
+			</button>
+		</div>
+	</div>
+
+	<div class="chart-content" bind:this={canvasContainer}>
+		{#if isLoading && chartData.length === 0}
+			<div class="loading">Lade Portfolio-Daten...</div>
+		{:else if errorMessage}
+			<div class="warning">
+				<p>{errorMessage}</p>
+			</div>
+		{:else if noDataAvailable}
+			<div class="no-data">
+				<p>Keine Portfolio-Daten für diesen Zeitraum verfügbar</p>
+			</div>
+		{/if}
+
+		<canvas bind:this={canvas} width="800" height="400"></canvas>
+
+		<!-- Tooltip für Hover-Funktion -->
+		{#if showTooltip && hoverIndex !== null}
+			<div class="tooltip" style="left: {tooltipX}px; top: {tooltipY - 60}px;">
+				<div class="tooltip-date">{tooltipDate}</div>
+				<div class="tooltip-value">{formatCurrency(tooltipValue)}</div>
+				{#if chartData[hoverIndex] && chartData[hoverIndex].preAccount}
+					<div class="tooltip-info">Vor Kontoerstellung</div>
+				{/if}
+			</div>
+		{/if}
+	</div>
 </div>
-  
+
 <style>
-  .chart-container {
-    background-color: white;
-    border-radius: 0.5rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  .chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-  
-  .chart-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin: 0;
-  }
-  
-  .timeframe-selector {
-    display: flex;
-    gap: 0.25rem;
-  }
-  
-  .timeframe-btn {
-    background-color: #f3f4f6;
-    border: none;
-    border-radius: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  
-  .timeframe-btn:hover {
-    background-color: #e5e7eb;
-  }
-  
-  .timeframe-btn.active {
-    background-color: #3b82f6;
-    color: white;
-  }
-  
-  .chart-content {
-    position: relative;
-    height: 300px;
-  }
-  
-  canvas {
-    width: 100%;
-    height: 100%;
-    cursor: crosshair;
-  }
-  
-  .loading, .warning, .no-data {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background-color: rgba(255, 255, 255, 0.8);
-    z-index: 10;
-    padding: 1rem;
-    text-align: center;
-    color: #4b5563;
-  }
-  
-  .warning {
-    color: #f59e0b;
-    background-color: rgba(255, 251, 235, 0.9);
-  }
-  
-  .no-data {
-    color: #6b7280;
-    background-color: rgba(249, 250, 251, 0.9);
-  }
-  
-  .tooltip {
-    position: absolute;
-    background-color: rgba(0, 0, 0, 0.75);
-    color: white;
-    border-radius: 4px;
-    padding: 6px 12px;
-    font-size: 12px;
-    pointer-events: none;
-    z-index: 20;
-    transform: translateX(-50%);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    min-width: 120px;
-    text-align: center;
-  }
-  
-  .tooltip:after {
-    content: '';
-    position: absolute;
-    bottom: -6px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-top: 6px solid rgba(0, 0, 0, 0.75);
-  }
-  
-  .tooltip-date {
-    font-size: 11px;
-    color: #bbbbbb;
-    margin-bottom: 2px;
-  }
-  
-  .tooltip-value {
-    font-weight: bold;
-    font-size: 14px;
-  }
-  
-  .tooltip-info {
-    font-size: 10px;
-    color: #999;
-    margin-top: 2px;
-    font-style: italic;
-  }
+	.chart-container {
+		background-color: white;
+		border-radius: 0.5rem;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+		padding: 1rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.chart-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+
+	.chart-title {
+		font-size: 1.25rem;
+		font-weight: 600;
+		margin: 0;
+	}
+
+	.timeframe-selector {
+		display: flex;
+		gap: 0.25rem;
+	}
+
+	.timeframe-btn {
+		background-color: #f3f4f6;
+		border: none;
+		border-radius: 0.25rem;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: background-color 0.2s;
+	}
+
+	.timeframe-btn:hover {
+		background-color: #e5e7eb;
+	}
+
+	.timeframe-btn.active {
+		background-color: #3b82f6;
+		color: white;
+	}
+
+	.chart-content {
+		position: relative;
+		height: 300px;
+	}
+
+	canvas {
+		width: 100%;
+		height: 100%;
+		cursor: crosshair;
+	}
+
+	.loading,
+	.warning,
+	.no-data {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		background-color: rgba(255, 255, 255, 0.8);
+		z-index: 10;
+		padding: 1rem;
+		text-align: center;
+		color: #4b5563;
+	}
+
+	.warning {
+		color: #f59e0b;
+		background-color: rgba(255, 251, 235, 0.9);
+	}
+
+	.no-data {
+		color: #6b7280;
+		background-color: rgba(249, 250, 251, 0.9);
+	}
+
+	.tooltip {
+		position: absolute;
+		background-color: rgba(0, 0, 0, 0.75);
+		color: white;
+		border-radius: 4px;
+		padding: 6px 12px;
+		font-size: 12px;
+		pointer-events: none;
+		z-index: 20;
+		transform: translateX(-50%);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+		min-width: 120px;
+		text-align: center;
+	}
+
+	.tooltip:after {
+		content: '';
+		position: absolute;
+		bottom: -6px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 0;
+		height: 0;
+		border-left: 6px solid transparent;
+		border-right: 6px solid transparent;
+		border-top: 6px solid rgba(0, 0, 0, 0.75);
+	}
+
+	.tooltip-date {
+		font-size: 11px;
+		color: #bbbbbb;
+		margin-bottom: 2px;
+	}
+
+	.tooltip-value {
+		font-weight: bold;
+		font-size: 14px;
+	}
+
+	.tooltip-info {
+		font-size: 10px;
+		color: #999;
+		margin-top: 2px;
+		font-style: italic;
+	}
 </style>
+
+<!-- Ein bisschen viel in einer Datei, aber so wird das in Svelte leider normalerweise gemacht-->

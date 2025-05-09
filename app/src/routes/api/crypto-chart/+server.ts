@@ -1,9 +1,7 @@
-// src/routes/api/crypto-chart/+server.ts
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { rateLimiter } from '$lib/server/api/rate-limiter';
 import { env } from '$env/dynamic/private';
-import { createMockChartResponse } from '$lib/server/api/fallback-data';
 
 export const GET: RequestHandler = async ({ url }) => {
   try {

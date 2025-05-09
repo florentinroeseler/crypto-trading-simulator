@@ -28,7 +28,7 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_DB=trading_simulator
     ports:
-      - '5433:5432'
+      - '543:5432'
     restart: unless-stopped
 
 volumes:

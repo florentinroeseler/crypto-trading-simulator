@@ -1,4 +1,3 @@
-// src/routes/profile/edit/+page.server.ts
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
