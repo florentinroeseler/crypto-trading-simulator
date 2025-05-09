@@ -1,38 +1,23 @@
-# Build-Stage
-FROM node:22-alpine AS build
+# Basis-Image mit Node.js
+FROM node:22.14.0
 
+# Arbeitsverzeichnis festlegen
 WORKDIR /app
 
-# Kopiere package.json und package-lock.json, um Abhängigkeiten zu installieren
+# Paketabhängigkeiten installieren
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
-# Kopiere den Rest des Projekts
+# Anwendungscode kopieren
 COPY . .
 
-# Build der Anwendung
-RUN npm run build
-
-# Runtime-Stage
-FROM node:22-alpine AS runtime
-
-WORKDIR /app
-
-# Kopiere die gebaute Anwendung und notwendige Dateien
-COPY --from=build /app/build ./build
-COPY --from=build /app/node_modules ./node_modules
-COPY package.json ./
-
-# Laufzeitabhängigkeiten
-RUN npm prune --production
-
-# Umgebungsvariablen setzen
-ENV NODE_ENV=production
+# Umgebungsvariablen für den Entwicklungsserver
+ENV NODE_ENV=development
 ENV HOST=0.0.0.0
 ENV PORT=5173
 
-# Port freigeben
+# Port exponieren (Standard für Vite/SvelteKit dev server)
 EXPOSE 5173
 
-# Startet die Anwendung
-CMD ["node", "build"]
+# Starten des Entwicklungsservers
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
