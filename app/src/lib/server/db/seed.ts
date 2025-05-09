@@ -83,7 +83,15 @@ const seedDatabase = async () => {
     console.error('Fehler beim Seeding der Datenbank:', error);
     process.exit(1);
   }
+  
 };
 
-// Führe das Seeding aus
-seedDatabase();
+seedDatabase()
+  .then(() => {
+    console.log("Seed-Prozess erfolgreich beendet.");
+    process.exit(0); // Erfolgreich beendet
+  })
+  .catch((error) => {
+    console.error("Seed-Prozess mit Fehlern beendet:", error);
+    process.exit(1); // Mit Fehler beendet
+  });
