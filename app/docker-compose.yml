@@ -25,7 +25,8 @@ services:
     restart: unless-stopped
     networks:
       - trading-network
-    command: sh -c "./scripts/start-app.sh"
+    working_dir: /app
+    command: sh -c "dos2unix /app/scripts/start-app.sh && chmod +x /app/scripts/*.sh && ./scripts/start-app.sh"
 
   db:
     image: postgres:15-alpine
@@ -41,7 +42,7 @@ services:
     networks:
       - trading-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d trading_simulator"]
+      test: ['CMD-SHELL', 'pg_isready -U user -d trading_simulator']
       interval: 5s
       timeout: 5s
       retries: 5
