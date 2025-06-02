@@ -6,16 +6,17 @@ dotenv.config();
 
 const seedDatabase = async () => {
   try {
-    console.log('Starte das Seeding der Datenbank...');
+    console.log('Überprüfe, ob Seeding nötig ist...');
 
     // Überprüfen, ob bereits Daten vorhanden sind
     const existingAssets = await db.select().from(assets);
     
-    // Vorhandene Assets löschen
-    console.log('Lösche vorhandene Assets...');
-    await db.delete(assets);
+    if (existingAssets.length > 0) {
+      console.log('Datenbank bereits mit Daten gefüllt. Überspringe Seeding.');
+      return;
+    }
 
-    // Krypto-Assets einfügen
+    console.log('Füge Standard-Assets hinzu...');
     const cryptoAssets = [
       {
         symbol: 'BTC',
